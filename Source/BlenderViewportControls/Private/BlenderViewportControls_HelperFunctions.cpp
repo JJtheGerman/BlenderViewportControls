@@ -9,16 +9,11 @@
 
 TTuple<FVector, FVector> TransformHelperFunctions::GetCursorWorldPosition(class FEditorViewportClient* InViewportClient)
 {
-	FViewportCursorLocation MousePosition = InViewportClient->GetCursorWorldLocationFromMousePos();
-	FSceneViewFamilyContext ViewFamily(FSceneViewFamily::ConstructionValues(
-		InViewportClient->Viewport,
-		InViewportClient->GetScene(),
-		InViewportClient->EngineShowFlags));
-
-	FSceneView* View = InViewportClient->CalcSceneView(&ViewFamily);
+	FSceneView* View = GetSceneView(InViewportClient);
+	FIntPoint MousePosition = InViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
 
 	FVector CursorWorldPosition, CursorWorldDirection;
-	View->DeprojectFVector2D(MousePosition.GetCursorPos(), CursorWorldPosition, CursorWorldDirection);
+	View->DeprojectFVector2D(MousePosition, CursorWorldPosition, CursorWorldDirection);
 
 	return TTuple<FVector, FVector>(CursorWorldPosition, CursorWorldDirection);
 }
@@ -37,4 +32,36 @@ FVector TransformHelperFunctions::LinePlaneIntersectionCameraObject(class FEdito
 	}
 
 	return OutIntersection;
+}
+
+FIntPoint TransformHelperFunctions::ProjectWorldLocationToScreen(class FEditorViewportClient* InViewportClient, FVector InWorldSpaceLocation, bool InClampValues)
+{
+	FSceneView* View = GetSceneView(InViewportClient);
+	
+	FVector2D OutScreenPos;
+	FMatrix const ViewProjectionMatrix = View->ViewMatrices.GetViewProjectionMatrix();
+	View->ProjectWorldToScreen(InWorldSpaceLocation, View->UnscaledViewRect, ViewProjectionMatrix, OutScreenPos);
+	
+	//Clamp Values because ProjectWorldToScreen can give you negative values...
+	if (InClampValues)
+	{
+		FIntPoint ViewportResolution = InViewportClient->Viewport->GetSizeXY();
+		OutScreenPos.X = FMath::Clamp((int32)OutScreenPos.X, 0, ViewportResolution.X);
+		OutScreenPos.Y = FMath::Clamp((int32)OutScreenPos.Y, 0, ViewportResolution.Y);
+	}
+
+	return FIntPoint(OutScreenPos.X, OutScreenPos.Y);
+}
+
+FSceneView* TransformHelperFunctions::GetSceneView(class FEditorViewportClient* InViewportClient)
+{
+	FViewportCursorLocation MousePosition = InViewportClient->GetCursorWorldLocationFromMousePos();
+	FSceneViewFamilyContext ViewFamily(FSceneViewFamily::ConstructionValues(
+		InViewportClient->Viewport,
+		InViewportClient->GetScene(),
+		InViewportClient->EngineShowFlags));
+
+	FSceneView* View = InViewportClient->CalcSceneView(&ViewFamily);
+
+	return View;
 }

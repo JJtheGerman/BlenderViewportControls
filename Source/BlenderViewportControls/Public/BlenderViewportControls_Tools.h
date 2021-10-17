@@ -6,6 +6,7 @@
 
 DECLARE_LOG_CATEGORY_EXTERN(LogMoveTool, Display, All);
 DECLARE_LOG_CATEGORY_EXTERN(LogRotateTool, Display, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogScaleTool, Display, All);
 
 class FBlenderToolMode
 {
@@ -16,12 +17,16 @@ public:
 		ToolBegin();
 	}
 
-	virtual ~FBlenderToolMode() { ToolClose(); };
+	/** 
+	* Canceling any transaction in the destructor ensures that we don't enter some undefined transaction state.
+	* Regular transaction closing is handled by ToolClose() 
+	*/
+	virtual ~FBlenderToolMode() { GEditor->CancelTransaction(0); };
 
 	// Main tool functions
 	virtual void ToolBegin();
 	virtual void ToolUpdate() {};
-	virtual void ToolClose(bool Success = true);
+	virtual void ToolClose(bool Success);
 
 	struct FSelectionToolHelper
 	{
@@ -49,11 +54,9 @@ public:
 		ToolBegin();
 	}
 
-	~FMoveMode() { ToolClose(); };
-
 	virtual void ToolBegin() override;
 	virtual void ToolUpdate() override;
-	virtual void ToolClose(bool Success = true) override;
+	virtual void ToolClose(bool Success) override;
 
 	struct FMoveToolSelectionHelper : FSelectionToolHelper
 	{
@@ -79,11 +82,9 @@ public:
 		ToolBegin();
 	}
 
-	~FRotateMode() { ToolClose(); };
-
 	virtual void ToolBegin() override;
 	virtual void ToolUpdate() override;
-	virtual void ToolClose(bool Success = true) override;
+	virtual void ToolClose(bool Success) override;
 
 private:
 
@@ -100,9 +101,11 @@ public:
 		ToolBegin();
 	}
 
-	~FScaleMode() { ToolClose(); };
-
 	virtual void ToolBegin() override;
 	virtual void ToolUpdate() override;
-	virtual void ToolClose(bool Success = true) override;
+	virtual void ToolClose(bool Success) override;
+
+private:
+	float StartDistance;
+	FIntPoint ActorScreenPosition;
 };

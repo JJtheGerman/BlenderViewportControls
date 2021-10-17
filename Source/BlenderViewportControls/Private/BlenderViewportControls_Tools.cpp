@@ -10,6 +10,7 @@
 
 DEFINE_LOG_CATEGORY(LogMoveTool);
 DEFINE_LOG_CATEGORY(LogRotateTool);
+DEFINE_LOG_CATEGORY(LogScaleTool);
 
 /**
  * Base Implementation of the FBlenderToolMode
@@ -18,12 +19,29 @@ void FBlenderToolMode::ToolBegin()
 {
 	// Change the selection outline color when in ToolMode
 	GEditor->SetSelectionOutlineColor(FLinearColor::White);
+
+	// Save our selection and their transforms so we can reset in case we cancel the operation.
+	SaveSelectedActorsTransforms(GEditor->GetSelectedActors());
 }
 
 void FBlenderToolMode::ToolClose(bool Success /*= true*/)
 {
 	// TODO: Save the default SelectionOutlineColor on EditorMode start and make it publicly accessible. This might break if users messed with their default outline colors.
 	GEditor->SetSelectionOutlineColor(GEditor->GetSelectedMaterialColor());
+
+	if (!Success)
+	{
+		for (auto& Defaults : DefaultTransforms)
+		{
+			Defaults.Actor->SetActorTransform(Defaults.DefaultTransform);
+		}
+
+		GEditor->CancelTransaction(0);
+		return;
+	}
+
+	// End the transaction so we can undo it later.
+	GEditor->EndTransaction();
 }
 
 void FBlenderToolMode::SaveSelectedActorsTransforms(class USelection* Selection)
@@ -44,7 +62,7 @@ void FBlenderToolMode::SaveSelectedActorsTransforms(class USelection* Selection)
  */
 void FMoveMode::ToolBegin()
 {
-	UE_LOG(LogMoveTool, Display, TEXT("Begin"));
+	UE_LOG(LogMoveTool, Verbose, TEXT("Begin"));
 
 	// Begins the Transaction so we can undo it later
 	GEditor->BeginTransaction(FText::FromString("BlenderMode: MoveActor"));
@@ -68,8 +86,6 @@ void FMoveMode::ToolBegin()
 			Selections.Add(MoveHelper);
 		}
 	}
-
-	SaveSelectedActorsTransforms(SelectedActors);
 }
 
 void FMoveMode::ToolUpdate()
@@ -107,21 +123,9 @@ void FMoveMode::ToolUpdate()
 
 void FMoveMode::ToolClose(bool Success)
 {
-	UE_LOG(LogMoveTool, Display, TEXT("Closed"));
+	FBlenderToolMode::ToolClose(Success);
 
-	if (!Success)
-	{
-		for (auto& Defaults : DefaultTransforms)
-		{
-			Defaults.Actor->SetActorTransform(Defaults.DefaultTransform);
-		}
-
-		GEditor->CancelTransaction(0);
-		return;
-	}
-
-	// End the transaction so we can undo it later.
-	GEditor->EndTransaction();
+	UE_LOG(LogMoveTool, Verbose, TEXT("Closed"));
 }
 
 
@@ -130,7 +134,7 @@ void FMoveMode::ToolClose(bool Success)
  */
 void FRotateMode::ToolBegin()
 {
-	UE_LOG(LogRotateTool, Display, TEXT("Begin"));
+	UE_LOG(LogRotateTool, Verbose, TEXT("Begin"));
 
 	// Begins the Transaction so we can undo it later
 	GEditor->BeginTransaction(FText::FromString("BlenderMode: RotateActor"));
@@ -156,9 +160,6 @@ void FRotateMode::ToolBegin()
 
 	// TODO: Change this code to check if there are multiple selections and then use the bounding box center instead.
 	LastUpdateMouseRotVector = (Intersection - DefaultTransforms[0].Actor->GetActorLocation()).GetSafeNormal();
-
-
-	SaveSelectedActorsTransforms(GEditor->GetSelectedActors());
 }
 
 void FRotateMode::ToolUpdate()
@@ -199,22 +200,11 @@ void FRotateMode::ToolUpdate()
 	LastCursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
 }
 
-void FRotateMode::ToolClose(bool Success /*= true*/)
+void FRotateMode::ToolClose(bool Success)
 {
-	UE_LOG(LogRotateTool, Display, TEXT("Closed"));
-	if (!Success)
-	{
-		for (auto& Defaults : DefaultTransforms)
-		{
-			Defaults.Actor->SetActorTransform(Defaults.DefaultTransform);
-		}
+	FBlenderToolMode::ToolClose(Success);
 
-		GEditor->CancelTransaction(0);
-		return;
-	}
-
-	// End the transaction so we can undo it later.
-	GEditor->EndTransaction();
+	UE_LOG(LogRotateTool, Verbose, TEXT("Closed"));
 }
 
 
@@ -224,15 +214,39 @@ void FRotateMode::ToolClose(bool Success /*= true*/)
  */
 void FScaleMode::ToolBegin()
 {
+	UE_LOG(LogScaleTool, Verbose, TEXT("Begin"));
 
+	// Begins the Transaction so we can undo it later
+	GEditor->BeginTransaction(FText::FromString("BlenderMode: ScaleActor"));
+	
+	FIntPoint CursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
+
+	USelection* Selection = GEditor->GetSelectedActors();
+	if (AActor* SelectedActor = Cast<AActor>(Selection->GetSelectedObject(0)))
+	{
+		ActorScreenPosition = TransformHelperFunctions::ProjectWorldLocationToScreen(ToolViewportClient, SelectedActor->GetActorLocation());
+		StartDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
+	}
 }
 
 void FScaleMode::ToolUpdate()
 {
+	FIntPoint CursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
 
+	float CurrentDistance;
+	USelection* Selection = GEditor->GetSelectedActors();
+	if (AActor* SelectedActor = Cast<AActor>(Selection->GetSelectedObject(0)))
+	{
+		CurrentDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
+		float NewScaleMultiplier = CurrentDistance / StartDistance;
+
+		SelectedActor->Modify();
+		SelectedActor->SetActorScale3D(DefaultTransforms[0].DefaultTransform.GetScale3D() * NewScaleMultiplier);
+	}
 }
 
-void FScaleMode::ToolClose(bool Success /*= true*/)
+void FScaleMode::ToolClose(bool Success)
 {
-
+	FBlenderToolMode::ToolClose(Success);
+	UE_LOG(LogScaleTool, Verbose, TEXT("Closed"));
 }

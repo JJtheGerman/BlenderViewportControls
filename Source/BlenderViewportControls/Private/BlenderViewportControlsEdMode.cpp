@@ -179,7 +179,7 @@ void FBlenderViewportControlsEdMode::FinishActiveOperation(bool Success /** Fals
 {
 	if (Success)
 	{
-		
+		ActiveToolMode->ToolClose(true);
 	}
 	else
 	{
