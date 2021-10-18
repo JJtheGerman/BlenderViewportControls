@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "EdMode.h"
 
-class TransformHelperFunctions
+class ToolHelperFunctions
 {
 public:
 	static TTuple<FVector, FVector> GetCursorWorldPosition(class FEditorViewportClient* InViewportClient);
@@ -13,4 +13,6 @@ public:
 	/** InClampValues will clamp values so they can't be negative. Otherwise it is possible to have values that are outside of the viewport */
 	static FIntPoint ProjectWorldLocationToScreen(class FEditorViewportClient* InViewportClient, FVector InWorldSpaceLocation, bool InClampValues = false);
 	static FSceneView* GetSceneView(class FEditorViewportClient* InViewportClient);
+	static class FBlenderViewportControlsEdMode* GetEdMode();
+	static class ATransformGroupActor* GetTransformGroupActor();
 };

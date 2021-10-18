@@ -2,6 +2,7 @@
 
 #include "BlenderViewportControls_Tools.h"
 #include "BlenderViewportControls_HelperFunctions.h"
+#include "BlenderViewportControls_GroupActor.h"
 #include "ViewportWorldInteraction.h"
 #include "EngineUtils.h"
 #include "DrawDebugHelpers.h"
@@ -19,7 +20,7 @@ void FBlenderToolMode::ToolBegin()
 {
 	// Change the selection outline color when in ToolMode
 	GEditor->SetSelectionOutlineColor(FLinearColor::White);
-
+	
 	// Save our selection and their transforms so we can reset in case we cancel the operation.
 	SaveSelectedActorsTransforms(GEditor->GetSelectedActors());
 }
@@ -68,12 +69,12 @@ void FMoveMode::ToolBegin()
 	GEditor->BeginTransaction(FText::FromString("BlenderMode: MoveActor"));
 
 	// Project the cursor from the screen to the world
-	TTuple<FVector, FVector> WorldLocDir = TransformHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
+	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
 	FVector CursorWorldPosition = WorldLocDir.Get<0>();
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FVector Intersection = TransformHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
+	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
 
 	USelection* SelectedActors = GEditor->GetSelectedActors();
 	for (FSelectionIterator Iter(*SelectedActors); Iter; ++Iter)
@@ -90,12 +91,12 @@ void FMoveMode::ToolBegin()
 
 void FMoveMode::ToolUpdate()
 {
-	TTuple<FVector, FVector> WorldLocDir = TransformHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
+	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
 	FVector CursorWorldPosition = WorldLocDir.Get<0>();
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FVector CursorIntersection = TransformHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
+	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
 
 	for (auto& Selection : Selections)
 	{
@@ -140,12 +141,12 @@ void FRotateMode::ToolBegin()
 	GEditor->BeginTransaction(FText::FromString("BlenderMode: RotateActor"));
 
 	// Project the cursor from the screen to the world
-	TTuple<FVector, FVector> WorldLocDir = TransformHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
+	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
 	FVector CursorWorldPosition = WorldLocDir.Get<0>();
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FVector Intersection = TransformHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
+	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
 
 	USelection* SelectedActors = GEditor->GetSelectedActors();
 	for (FSelectionIterator Iter(*SelectedActors); Iter; ++Iter)
@@ -164,12 +165,12 @@ void FRotateMode::ToolBegin()
 
 void FRotateMode::ToolUpdate()
 {
-	TTuple<FVector, FVector> WorldLocDir = TransformHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
+	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
 	FVector CursorWorldPosition = WorldLocDir.Get<0>();
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FVector CursorIntersection = TransformHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
+	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
 
 	FVector currentRotVector = (CursorIntersection - DefaultTransforms[0].Actor->GetActorLocation()).GetSafeNormal();
 
@@ -224,7 +225,7 @@ void FScaleMode::ToolBegin()
 	USelection* Selection = GEditor->GetSelectedActors();
 	if (AActor* SelectedActor = Cast<AActor>(Selection->GetSelectedObject(0)))
 	{
-		ActorScreenPosition = TransformHelperFunctions::ProjectWorldLocationToScreen(ToolViewportClient, SelectedActor->GetActorLocation());
+		ActorScreenPosition = ToolHelperFunctions::ProjectWorldLocationToScreen(ToolViewportClient, SelectedActor->GetActorLocation());
 		StartDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
 	}
 }

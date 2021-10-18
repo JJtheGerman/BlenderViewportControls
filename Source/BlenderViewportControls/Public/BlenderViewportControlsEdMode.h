@@ -19,6 +19,8 @@ public:
 	bool UsesToolkits() const override { return false; }
 	// End of FEdMode interface
 
+	class ATransformGroupActor* GetTransformGroupActor() { return TransformGroupActor; }
+	
 protected:
 
 	/** Transform Reset Function */
@@ -30,6 +32,8 @@ protected:
 
 	bool HasActiveSelection();
 
+	void CreateTransformActor();
+
 	/** Delegate handle for registered selection change lambda */
 	FDelegateHandle SelectionChangedHandle;
 
@@ -37,4 +41,7 @@ private:
 	
 	/** The active tool, e.g Moving an Object, Rotating an Object, Scaling an Object */
 	TSharedPtr<class FBlenderToolMode> ActiveToolMode;
+
+	/** A helper actor to make transform operations easier */
+	class ATransformGroupActor* TransformGroupActor;
 };

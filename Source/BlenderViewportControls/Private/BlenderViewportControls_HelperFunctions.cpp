@@ -2,12 +2,15 @@
 
 #include "BlenderViewportControls_HelperFunctions.h"
 #include "ViewportWorldInteraction.h"
+#include "BlenderViewportControlsEdMode.h"
+#include "BlenderViewportControls_GroupActor.h"
 #include "EngineUtils.h"
+#include "EditorModeManager.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/Selection.h"
 
 
-TTuple<FVector, FVector> TransformHelperFunctions::GetCursorWorldPosition(class FEditorViewportClient* InViewportClient)
+TTuple<FVector, FVector> ToolHelperFunctions::GetCursorWorldPosition(class FEditorViewportClient* InViewportClient)
 {
 	FSceneView* View = GetSceneView(InViewportClient);
 	FIntPoint MousePosition = InViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
@@ -18,7 +21,7 @@ TTuple<FVector, FVector> TransformHelperFunctions::GetCursorWorldPosition(class 
 	return TTuple<FVector, FVector>(CursorWorldPosition, CursorWorldDirection);
 }
 
-FVector TransformHelperFunctions::LinePlaneIntersectionCameraObject(class FEditorViewportClient* InViewportClient, FVector InCursorWorldPos, FVector InCursorWorldDir)
+FVector ToolHelperFunctions::LinePlaneIntersectionCameraObject(class FEditorViewportClient* InViewportClient, FVector InCursorWorldPos, FVector InCursorWorldDir)
 {
 	FVector OutIntersection;
 	float T;
@@ -34,7 +37,7 @@ FVector TransformHelperFunctions::LinePlaneIntersectionCameraObject(class FEdito
 	return OutIntersection;
 }
 
-FIntPoint TransformHelperFunctions::ProjectWorldLocationToScreen(class FEditorViewportClient* InViewportClient, FVector InWorldSpaceLocation, bool InClampValues)
+FIntPoint ToolHelperFunctions::ProjectWorldLocationToScreen(class FEditorViewportClient* InViewportClient, FVector InWorldSpaceLocation, bool InClampValues)
 {
 	FSceneView* View = GetSceneView(InViewportClient);
 	
@@ -53,7 +56,7 @@ FIntPoint TransformHelperFunctions::ProjectWorldLocationToScreen(class FEditorVi
 	return FIntPoint(OutScreenPos.X, OutScreenPos.Y);
 }
 
-FSceneView* TransformHelperFunctions::GetSceneView(class FEditorViewportClient* InViewportClient)
+FSceneView* ToolHelperFunctions::GetSceneView(class FEditorViewportClient* InViewportClient)
 {
 	FViewportCursorLocation MousePosition = InViewportClient->GetCursorWorldLocationFromMousePos();
 	FSceneViewFamilyContext ViewFamily(FSceneViewFamily::ConstructionValues(
@@ -64,4 +67,14 @@ FSceneView* TransformHelperFunctions::GetSceneView(class FEditorViewportClient* 
 	FSceneView* View = InViewportClient->CalcSceneView(&ViewFamily);
 
 	return View;
+}
+
+FBlenderViewportControlsEdMode* ToolHelperFunctions::GetEdMode()
+{
+	return (FBlenderViewportControlsEdMode*)GLevelEditorModeTools().GetActiveMode(FBlenderViewportControlsEdMode::EM_BlenderViewportControlsEdModeId);
+}
+
+class ATransformGroupActor* ToolHelperFunctions::GetTransformGroupActor()
+{
+	return GetEdMode()->GetTransformGroupActor();
 }

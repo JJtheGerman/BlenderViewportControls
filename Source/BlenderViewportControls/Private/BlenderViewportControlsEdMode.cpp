@@ -2,6 +2,8 @@
 
 #include "BlenderViewportControlsEdMode.h"
 #include "BlenderViewportControls_Tools.h"
+#include "BlenderViewportControls_GroupActor.h"
+#include "BlenderViewportControls_HelperFunctions.h"
 #include "Toolkits/ToolkitManager.h"
 #include "EditorModeManager.h"
 #include "Editor/EditorEngine.h"
@@ -20,8 +22,12 @@ extern UNREALED_API UEditorEngine* GEditor;
 void FBlenderViewportControlsEdMode::Enter()
 {
 	FEdMode::Enter();
-
+	
 	SelectionChangedHandle = USelection::SelectionChangedEvent.AddLambda([=](UObject* Object) {});
+
+	// An empty actor that exists so we can do simplify multi object transforms. Instead of doing a whole lot of math
+	// we simply parent selected object directly to it and modify the transform actor instead
+	CreateTransformActor();
 }
 
 /** FEdMode: Called when user Exits the Mode */
@@ -192,4 +198,31 @@ void FBlenderViewportControlsEdMode::FinishActiveOperation(bool Success /** Fals
 bool FBlenderViewportControlsEdMode::HasActiveSelection()
 {
 	return GEditor->GetSelectedActorCount() == 0 ? false : true;
+}
+
+void FBlenderViewportControlsEdMode::CreateTransformActor()
+{
+	UWorld* World = GetWorld();
+	const bool bWasWorldPackageDirty = World->GetOutermost()->IsDirty();
+
+	FActorSpawnParameters ActorSpawnParameters;
+	ActorSpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ActorSpawnParameters.ObjectFlags = EObjectFlags::RF_Transient | EObjectFlags::RF_DuplicateTransient;
+	ActorSpawnParameters.bHideFromSceneOutliner = true;
+
+	AActor* NewActor = World->SpawnActor<AActor>(ATransformGroupActor::StaticClass(), ActorSpawnParameters);
+
+	// Give the new actor a root scene component, so we can attach multiple sibling components to it
+	USceneComponent* SceneComponent = NewObject<USceneComponent>(NewActor);
+	NewActor->AddOwnedComponent(SceneComponent);
+	NewActor->SetRootComponent(SceneComponent);
+	SceneComponent->RegisterComponent();
+
+	// Don't dirty the level file after spawning a transient actor
+	if (!bWasWorldPackageDirty)
+	{
+		World->GetOutermost()->SetDirtyFlag(false);
+	}
+
+	TransformGroupActor = CastChecked<ATransformGroupActor>(NewActor);
 }
