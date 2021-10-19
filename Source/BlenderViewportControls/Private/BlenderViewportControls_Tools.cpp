@@ -107,23 +107,6 @@ void FMoveMode::ToolUpdate()
 
 	TransformGroupActor->Modify();
 	TransformGroupActor->SetActorLocation(CursorIntersection - SelectionOffset);
-
-	// Surface snapping
-	//if (ToolViewportClient->IsCtrlPressed())
-	//{
-	//	UWorld* World = ToolViewportClient->GetWorld();
-	//	if (World)
-	//	{
-	//		FHitResult HitResult;
-	//		FCollisionQueryParams QueryParams;
-	//		QueryParams.AddIgnoredActors(ActorCurrentSelection);
-	//		if (World->LineTraceSingleByChannel(HitResult, CursorWorldPosition, CursorWorldPosition + (CursorWorldDirection * 100000.f), ECC_Visibility, QueryParams))
-	//		{
-	//			Selections[0].Actor->SetActorLocation(HitResult.ImpactPoint);
-	//			Selections[0].Actor->SetActorRotation(HitResult.ImpactNormal.Rotation());
-	//		}
-	//	}
-	//}
 }
 
 void FMoveMode::ToolClose(bool Success)
