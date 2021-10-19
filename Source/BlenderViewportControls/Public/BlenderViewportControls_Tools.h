@@ -37,12 +37,17 @@ public:
 		FTransform DefaultTransform;
 	};
 
-	/** Saves a selection of actors so we can reset their transforms later in case an operation gets canceled */
-	void SaveSelectedActorsTransforms(class USelection* Selection);
+	TArray<AActor*> GetSelectedActors() 
+	{
+		TArray<AActor*> Actors;
+		for (auto& Info : SelectionInfos) { Actors.Add(Info.Actor); }
+		return Actors;
+	}
 
 protected:
 	class FEditorViewportClient* ToolViewportClient;
-	TArray<FSelectionToolHelper> DefaultTransforms;
+	TArray<FSelectionToolHelper> SelectionInfos;
+	ATransformGroupActor* TransformGroupActor;
 };
 
 class FMoveMode : public FBlenderToolMode
@@ -58,19 +63,9 @@ public:
 	virtual void ToolUpdate() override;
 	virtual void ToolClose(bool Success) override;
 
-	struct FMoveToolSelectionHelper : FSelectionToolHelper
-	{
-		FMoveToolSelectionHelper(AActor* InActor, FTransform InTransform)
-			: FSelectionToolHelper(InActor, InTransform) {};
-
-		// Storing the Offset from the cursor
-		FVector SelectionOffset;
-	};
-
-
 private:
 
-	TArray<FMoveToolSelectionHelper> Selections;
+	FVector SelectionOffset;
 };
 
 class FRotateMode : public FBlenderToolMode

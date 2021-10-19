@@ -17,22 +17,19 @@ TTuple<FVector, FVector> ToolHelperFunctions::GetCursorWorldPosition(class FEdit
 
 	FVector CursorWorldPosition, CursorWorldDirection;
 	View->DeprojectFVector2D(MousePosition, CursorWorldPosition, CursorWorldDirection);
-
+	
 	return TTuple<FVector, FVector>(CursorWorldPosition, CursorWorldDirection);
 }
 
-FVector ToolHelperFunctions::LinePlaneIntersectionCameraObject(class FEditorViewportClient* InViewportClient, FVector InCursorWorldPos, FVector InCursorWorldDir)
+FVector ToolHelperFunctions::LinePlaneIntersectionCameraGroup(class FEditorViewportClient* InViewportClient, FVector InCursorWorldPos, FVector InCursorWorldDir, AActor* InTransformGroupActor)
 {
 	FVector OutIntersection;
 	float T;
-	USelection* SelectedActors = GEditor->GetSelectedActors();
-	if (AActor* SelectedActor = Cast<AActor>(SelectedActors->GetSelectedObject(0)))
-	{
-		FVector ScreenSpacePlaneNormal = InViewportClient->GetViewRotation().Vector();
-		// TODO?: This 100000 should probably be replaced with the actual distance + some extra between the cursor Pos and ObjectPosition
-		UKismetMathLibrary::LinePlaneIntersection_OriginNormal(InCursorWorldPos, InCursorWorldPos + (InCursorWorldDir * 100000),
-			SelectedActor->GetActorLocation(), ScreenSpacePlaneNormal, T, OutIntersection);
-	}
+
+	FVector ScreenSpacePlaneNormal = InViewportClient->GetViewRotation().Vector();
+	// TODO?: This 100000 should probably be replaced with the actual distance + some extra between the cursor Pos and ObjectPosition
+	UKismetMathLibrary::LinePlaneIntersection_OriginNormal(InCursorWorldPos, InCursorWorldPos + (InCursorWorldDir * 100000),
+		InTransformGroupActor->GetActorLocation(), ScreenSpacePlaneNormal, T, OutIntersection);
 
 	return OutIntersection;
 }
@@ -77,4 +74,15 @@ FBlenderViewportControlsEdMode* ToolHelperFunctions::GetEdMode()
 class ATransformGroupActor* ToolHelperFunctions::GetTransformGroupActor()
 {
 	return GetEdMode()->GetTransformGroupActor();
+}
+
+FVector ToolHelperFunctions::GetAverageLocation(const TArray<AActor*>& SelectedActors)
+{
+	FVector AverageLocation = FVector::ZeroVector;
+	for (AActor* Actor : SelectedActors)
+	{
+		AverageLocation += Actor->GetActorLocation();
+	}
+
+	return AverageLocation / SelectedActors.Num();
 }

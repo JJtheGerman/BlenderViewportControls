@@ -23,7 +23,12 @@ void FBlenderViewportControlsEdMode::Enter()
 {
 	FEdMode::Enter();
 	
-	SelectionChangedHandle = USelection::SelectionChangedEvent.AddLambda([=](UObject* Object) {});
+	// If we lose our selection, set the SharedPtr to null to get rid of the active tool
+	SelectionChangedHandle = USelection::SelectionChangedEvent.AddLambda([&](UObject* Object)
+	{
+		if (ActiveToolMode) { ActiveToolMode->ToolClose(false); }
+		ActiveToolMode = nullptr;
+	});
 
 	// An empty actor that exists so we can do simplify multi object transforms. Instead of doing a whole lot of math
 	// we simply parent selected object directly to it and modify the transform actor instead
@@ -35,6 +40,9 @@ void FBlenderViewportControlsEdMode::Exit()
 {
 	// Unbind delegates
 	USelection::SelectionChangedEvent.Remove(SelectionChangedHandle);
+
+	// Destroy the group actor when we exit the editor mode
+	TransformGroupActor->Destroy();
 
 	// Call base Exit method to ensure proper cleanup
 	FEdMode::Exit();
@@ -159,7 +167,7 @@ bool FBlenderViewportControlsEdMode::InputKey(FEditorViewportClient* InViewportC
 
 void FBlenderViewportControlsEdMode::ResetSpecificActorTransform(void(*DoReset)(AActor*))
 {
-	// The resets should only work when we are not in an active operation and we have something selected
+	// The selection transform resets should only work when we are not in an active operation and we have something selected
 	if (IsOperationInProgress() || !HasActiveSelection())
 	{
 		return;
@@ -214,11 +222,12 @@ void FBlenderViewportControlsEdMode::CreateTransformActor()
 
 	// Give the new actor a root scene component, so we can attach multiple sibling components to it
 	USceneComponent* SceneComponent = NewObject<USceneComponent>(NewActor);
+	SceneComponent->SetMobility(EComponentMobility::Static);
 	NewActor->AddOwnedComponent(SceneComponent);
 	NewActor->SetRootComponent(SceneComponent);
 	SceneComponent->RegisterComponent();
 
-	// Don't dirty the level file after spawning a transient actor
+	// Don't dirty the level file after spawning
 	if (!bWasWorldPackageDirty)
 	{
 		World->GetOutermost()->SetDirtyFlag(false);

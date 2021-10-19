@@ -19,10 +19,31 @@ DEFINE_LOG_CATEGORY(LogScaleTool);
 void FBlenderToolMode::ToolBegin()
 {
 	// Change the selection outline color when in ToolMode
-	GEditor->SetSelectionOutlineColor(FLinearColor::White);
-	
-	// Save our selection and their transforms so we can reset in case we cancel the operation.
-	SaveSelectedActorsTransforms(GEditor->GetSelectedActors());
+	GEditor->SetSelectionOutlineColor(FLinearColor::White);	
+
+	// Getting a reference to the group actor that is created when the editor mode is activated.
+	TransformGroupActor = ToolHelperFunctions::GetTransformGroupActor();
+
+	USelection* CurrentSelection = GEditor->GetSelectedActors();
+	for (FSelectionIterator Iter(*CurrentSelection); Iter; ++Iter)
+	{
+		if (AActor* LevelActor = Cast<AActor>(*Iter))
+		{
+			SelectionInfos.Add(FSelectionToolHelper(LevelActor, LevelActor->GetTransform()));
+		}
+	}
+
+	// Setting the transform origin to the average location of selection.
+	TransformGroupActor->SetActorLocation(ToolHelperFunctions::GetAverageLocation(GetSelectedActors()));
+	// Zeroing Scale and Rotation to make Actor attach/detach easier.
+	TransformGroupActor->SetActorScale3D(FVector::OneVector);
+	TransformGroupActor->SetActorRotation(FRotator::ZeroRotator);
+
+	for (auto& Info : SelectionInfos)
+	{
+		FAttachmentTransformRules AttachRules(FAttachmentTransformRules::KeepWorldTransform);
+		Info.Actor->AttachToActor(TransformGroupActor, AttachRules);
+	}
 }
 
 void FBlenderToolMode::ToolClose(bool Success /*= true*/)
@@ -32,28 +53,23 @@ void FBlenderToolMode::ToolClose(bool Success /*= true*/)
 
 	if (!Success)
 	{
-		for (auto& Defaults : DefaultTransforms)
+		for (auto& Info : SelectionInfos)
 		{
-			Defaults.Actor->SetActorTransform(Defaults.DefaultTransform);
+			Info.Actor->SetActorTransform(Info.DefaultTransform);
 		}
 
 		GEditor->CancelTransaction(0);
-		return;
+	}
+
+	for (auto& Info : SelectionInfos)
+	{
+		FDetachmentTransformRules DetachmentRules(FDetachmentTransformRules::KeepWorldTransform);
+		DetachmentRules.ScaleRule = EDetachmentRule::KeepWorld;
+		Info.Actor->DetachFromActor(DetachmentRules);
 	}
 
 	// End the transaction so we can undo it later.
 	GEditor->EndTransaction();
-}
-
-void FBlenderToolMode::SaveSelectedActorsTransforms(class USelection* Selection)
-{
-	for (FSelectionIterator Iter(*Selection); Iter; ++Iter)
-	{
-		if (AActor* LevelActor = Cast<AActor>(*Iter))
-		{
-			DefaultTransforms.Add(FSelectionToolHelper(LevelActor, LevelActor->GetTransform()));
-		}
-	}
 }
 
 
@@ -74,19 +90,10 @@ void FMoveMode::ToolBegin()
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
+	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionCameraGroup(ToolViewportClient, CursorWorldPosition, CursorWorldDirection, TransformGroupActor);
 
-	USelection* SelectedActors = GEditor->GetSelectedActors();
-	for (FSelectionIterator Iter(*SelectedActors); Iter; ++Iter)
-	{
-		if (AActor* LevelActor = Cast<AActor>(*Iter))
-		{
-			FMoveToolSelectionHelper MoveHelper(LevelActor, LevelActor->GetTransform());
-			// We store an offset for each actor from the cursor so they stay at their relative location when moving
-			MoveHelper.SelectionOffset = Intersection - LevelActor->GetActorLocation();
-			Selections.Add(MoveHelper);
-		}
-	}
+	// We store an offset for each actor from the cursor so they stay at their relative location when moving
+	SelectionOffset = Intersection - TransformGroupActor->GetActorLocation();
 }
 
 void FMoveMode::ToolUpdate()
@@ -96,30 +103,27 @@ void FMoveMode::ToolUpdate()
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
+	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionCameraGroup(ToolViewportClient, CursorWorldPosition, CursorWorldDirection, TransformGroupActor);
 
-	for (auto& Selection : Selections)
-	{
-		FVector NewLocation = CursorIntersection - Selection.SelectionOffset;
-		Selection.Actor->Modify();
-		Selection.Actor->SetActorLocation(NewLocation);
-	}
+	TransformGroupActor->Modify();
+	TransformGroupActor->SetActorLocation(CursorIntersection - SelectionOffset);
 
-	if (ToolViewportClient->IsCtrlPressed() && Selections.Num() == 1)
-	{
-		UWorld* World = ToolViewportClient->GetWorld();
-		if (World)
-		{
-			FHitResult HitResult;
-			FCollisionQueryParams QueryParams;
-			QueryParams.AddIgnoredActor(Selections[0].Actor);
-			if (World->LineTraceSingleByChannel(HitResult, CursorWorldPosition, CursorWorldPosition + (CursorWorldDirection * 100000.f), ECC_Visibility, QueryParams))
-			{
-				Selections[0].Actor->SetActorLocation(HitResult.ImpactPoint);
-				Selections[0].Actor->SetActorRotation(HitResult.ImpactNormal.Rotation());
-			}
-		}
-	}
+	// Surface snapping
+	//if (ToolViewportClient->IsCtrlPressed())
+	//{
+	//	UWorld* World = ToolViewportClient->GetWorld();
+	//	if (World)
+	//	{
+	//		FHitResult HitResult;
+	//		FCollisionQueryParams QueryParams;
+	//		QueryParams.AddIgnoredActors(ActorCurrentSelection);
+	//		if (World->LineTraceSingleByChannel(HitResult, CursorWorldPosition, CursorWorldPosition + (CursorWorldDirection * 100000.f), ECC_Visibility, QueryParams))
+	//		{
+	//			Selections[0].Actor->SetActorLocation(HitResult.ImpactPoint);
+	//			Selections[0].Actor->SetActorRotation(HitResult.ImpactNormal.Rotation());
+	//		}
+	//	}
+	//}
 }
 
 void FMoveMode::ToolClose(bool Success)
@@ -146,21 +150,9 @@ void FRotateMode::ToolBegin()
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
+	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionCameraGroup(ToolViewportClient, CursorWorldPosition, CursorWorldDirection, TransformGroupActor);
 
-	USelection* SelectedActors = GEditor->GetSelectedActors();
-	for (FSelectionIterator Iter(*SelectedActors); Iter; ++Iter)
-	{
-		if (AActor* LevelActor = Cast<AActor>(*Iter))
-		{
-			FSelectionToolHelper ToolHelper(LevelActor, LevelActor->GetTransform());
-			// We store an offset for each actor from the cursor so they stay at their relative location when moving
-			DefaultTransforms.Add(ToolHelper);
-		}
-	}
-
-	// TODO: Change this code to check if there are multiple selections and then use the bounding box center instead.
-	LastUpdateMouseRotVector = (Intersection - DefaultTransforms[0].Actor->GetActorLocation()).GetSafeNormal();
+	LastUpdateMouseRotVector = (Intersection - TransformGroupActor->GetActorLocation()).GetSafeNormal();
 }
 
 void FRotateMode::ToolUpdate()
@@ -170,9 +162,9 @@ void FRotateMode::ToolUpdate()
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionCameraObject(ToolViewportClient, CursorWorldPosition, CursorWorldDirection);
+	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionCameraGroup(ToolViewportClient, CursorWorldPosition, CursorWorldDirection, TransformGroupActor);
 
-	FVector currentRotVector = (CursorIntersection - DefaultTransforms[0].Actor->GetActorLocation()).GetSafeNormal();
+	FVector currentRotVector = (CursorIntersection - TransformGroupActor->GetActorLocation()).GetSafeNormal();
 
 	// Gives us the degrees between the cursor starting position and end position in -180 - 180;
 	float degreesBetweenVectors = UKismetMathLibrary::DegAcos(FVector::DotProduct(currentRotVector, LastUpdateMouseRotVector));
@@ -195,9 +187,9 @@ void FRotateMode::ToolUpdate()
 		AddRotation = FRotator::ZeroRotator;
 	}
 
-	DefaultTransforms[0].Actor->AddActorWorldRotation(AddRotation);
+	TransformGroupActor->AddActorWorldRotation(AddRotation);
 
-	LastUpdateMouseRotVector = (CursorIntersection - DefaultTransforms[0].Actor->GetActorLocation()).GetSafeNormal();
+	LastUpdateMouseRotVector = (CursorIntersection - TransformGroupActor->GetActorLocation()).GetSafeNormal();
 	LastCursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
 }
 
@@ -222,28 +214,19 @@ void FScaleMode::ToolBegin()
 	
 	FIntPoint CursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
 
-	USelection* Selection = GEditor->GetSelectedActors();
-	if (AActor* SelectedActor = Cast<AActor>(Selection->GetSelectedObject(0)))
-	{
-		ActorScreenPosition = ToolHelperFunctions::ProjectWorldLocationToScreen(ToolViewportClient, SelectedActor->GetActorLocation());
-		StartDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
-	}
+	ActorScreenPosition = ToolHelperFunctions::ProjectWorldLocationToScreen(ToolViewportClient, TransformGroupActor->GetActorLocation());
+	StartDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
 }
 
 void FScaleMode::ToolUpdate()
 {
 	FIntPoint CursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
 
-	float CurrentDistance;
-	USelection* Selection = GEditor->GetSelectedActors();
-	if (AActor* SelectedActor = Cast<AActor>(Selection->GetSelectedObject(0)))
-	{
-		CurrentDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
-		float NewScaleMultiplier = CurrentDistance / StartDistance;
+	float CurrentDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
+	float NewScaleMultiplier = CurrentDistance / StartDistance;
 
-		SelectedActor->Modify();
-		SelectedActor->SetActorScale3D(DefaultTransforms[0].DefaultTransform.GetScale3D() * NewScaleMultiplier);
-	}
+	TransformGroupActor->Modify();
+	TransformGroupActor->SetActorScale3D(FVector(NewScaleMultiplier));
 }
 
 void FScaleMode::ToolClose(bool Success)
