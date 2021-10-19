@@ -11,8 +11,8 @@ DECLARE_LOG_CATEGORY_EXTERN(LogScaleTool, Display, All);
 class FBlenderToolMode
 {
 public:
-	FBlenderToolMode(class FEditorViewportClient* InViewportClient)
-		: ToolViewportClient(InViewportClient)
+	FBlenderToolMode(class FEditorViewportClient* InViewportClient, FText InOperationName)
+		: ToolViewportClient(InViewportClient), OperationName(InOperationName)
 	{
 		ToolBegin();
 	}
@@ -48,14 +48,16 @@ protected:
 	class FEditorViewportClient* ToolViewportClient;
 	TArray<FSelectionToolHelper> SelectionInfos;
 	ATransformGroupActor* TransformGroupActor;
+private:
+	const FText OperationName;
 };
 
 class FMoveMode : public FBlenderToolMode
 {
 public:
 
-	FMoveMode(FEditorViewportClient* InViewportClient)
-		:FBlenderToolMode(InViewportClient) {
+	FMoveMode(FEditorViewportClient* InViewportClient, FText InOperationName)
+		:FBlenderToolMode(InViewportClient, InOperationName) {
 		ToolBegin();
 	}
 
@@ -72,8 +74,8 @@ class FRotateMode : public FBlenderToolMode
 {
 public:
 
-	FRotateMode(FEditorViewportClient* InViewportClient)
-		:FBlenderToolMode(InViewportClient) {
+	FRotateMode(FEditorViewportClient* InViewportClient, FText InOperationName)
+		:FBlenderToolMode(InViewportClient, InOperationName) {
 		ToolBegin();
 	}
 
@@ -91,8 +93,8 @@ class FScaleMode : public FBlenderToolMode
 {
 public:
 
-	FScaleMode(FEditorViewportClient* InViewportClient)
-		:FBlenderToolMode(InViewportClient) {
+	FScaleMode(FEditorViewportClient* InViewportClient, FText InOperationName)
+		:FBlenderToolMode(InViewportClient, InOperationName) {
 		ToolBegin();
 	}
 

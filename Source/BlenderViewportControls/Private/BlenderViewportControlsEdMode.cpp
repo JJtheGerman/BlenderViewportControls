@@ -30,8 +30,8 @@ void FBlenderViewportControlsEdMode::Enter()
 		ActiveToolMode = nullptr;
 	});
 
-	// An empty actor that exists so we can do simplify multi object transforms. Instead of doing a whole lot of math
-	// we simply parent selected object directly to it and modify the transform actor instead
+	// An empty actor that exists so we can simplify multi object transforms. Instead of doing a whole lot of math
+	// we simply parent selected objects directly to it and modify the transform actor instead
 	CreateTransformActor();
 }
 
@@ -93,21 +93,21 @@ bool FBlenderViewportControlsEdMode::InputKey(FEditorViewportClient* InViewportC
 		// Enter Actor Move Mode
 		if (InKey == EKeys::G && InEvent != IE_Released)
 		{
-			ActiveToolMode = MakeShared<FMoveMode>(InViewportClient);
+			ActiveToolMode = MakeShared<FMoveMode>(InViewportClient, FText::FromString(TEXT("BlenderTool: Move")));
 			return true;
 		}
 
 		// Enter Actor Rotate Mode
 		if (InKey == EKeys::R && InEvent != IE_Released)
 		{
-			ActiveToolMode = MakeShared<FRotateMode>(InViewportClient);
+			ActiveToolMode = MakeShared<FRotateMode>(InViewportClient, FText::FromString(TEXT("BlenderTool: Rotate")));
 			return true;
 		}
 
 		// Enter Actor Scale Mode
 		if (InKey == EKeys::S && InEvent != IE_Released)
 		{
-			ActiveToolMode = MakeShared<FScaleMode>(InViewportClient);
+			ActiveToolMode = MakeShared<FScaleMode>(InViewportClient, FText::FromString(TEXT("BlenderTool: Scale")));
 			return true;
 		}
 	}
@@ -174,7 +174,7 @@ void FBlenderViewportControlsEdMode::ResetSpecificActorTransform(void(*DoReset)(
 	}
 
 	// Start Transaction
-	GEditor->BeginTransaction(FText::FromString("ResetActorTransform"));
+	GEditor->BeginTransaction(FText::FromString("BlenderTool: ResetTransform"));
 	USelection* SelectedActors = GEditor->GetSelectedActors();
 	for (FSelectionIterator Iter(*SelectedActors); Iter; ++Iter)
 	{
@@ -205,7 +205,7 @@ void FBlenderViewportControlsEdMode::FinishActiveOperation(bool Success /** Fals
 
 bool FBlenderViewportControlsEdMode::HasActiveSelection()
 {
-	return GEditor->GetSelectedActorCount() == 0 ? false : true;
+	return GEditor->GetSelectedActorCount() > 0 ? true : false;
 }
 
 void FBlenderViewportControlsEdMode::CreateTransformActor()

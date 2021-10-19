@@ -39,8 +39,15 @@ void FBlenderToolMode::ToolBegin()
 	TransformGroupActor->SetActorScale3D(FVector::OneVector);
 	TransformGroupActor->SetActorRotation(FRotator::ZeroRotator);
 
+	// Start Parent Transaction
+	GEditor->BeginTransaction(OperationName);
+
 	for (auto& Info : SelectionInfos)
 	{
+		// Mark modified for undo system
+		Info.Actor->Modify();
+		TransformGroupActor->Modify();
+
 		FAttachmentTransformRules AttachRules(FAttachmentTransformRules::KeepWorldTransform);
 		Info.Actor->AttachToActor(TransformGroupActor, AttachRules);
 	}
@@ -50,6 +57,18 @@ void FBlenderToolMode::ToolClose(bool Success /*= true*/)
 {
 	// TODO: Save the default SelectionOutlineColor on EditorMode start and make it publicly accessible. This might break if users messed with their default outline colors.
 	GEditor->SetSelectionOutlineColor(GEditor->GetSelectedMaterialColor());
+
+	for (auto& Info : SelectionInfos)
+	{
+		Info.Actor->Modify();
+
+		FDetachmentTransformRules DetachmentRules(FDetachmentTransformRules::KeepWorldTransform);
+		DetachmentRules.ScaleRule = EDetachmentRule::KeepWorld;
+		Info.Actor->DetachFromActor(DetachmentRules);
+	}
+	
+	// Ends the child transaction
+	GEditor->EndTransaction();
 
 	if (!Success)
 	{
@@ -61,14 +80,7 @@ void FBlenderToolMode::ToolClose(bool Success /*= true*/)
 		GEditor->CancelTransaction(0);
 	}
 
-	for (auto& Info : SelectionInfos)
-	{
-		FDetachmentTransformRules DetachmentRules(FDetachmentTransformRules::KeepWorldTransform);
-		DetachmentRules.ScaleRule = EDetachmentRule::KeepWorld;
-		Info.Actor->DetachFromActor(DetachmentRules);
-	}
-
-	// End the transaction so we can undo it later.
+	// End the parent transaction so we can undo it.
 	GEditor->EndTransaction();
 }
 
@@ -81,8 +93,8 @@ void FMoveMode::ToolBegin()
 {
 	UE_LOG(LogMoveTool, Verbose, TEXT("Begin"));
 
-	// Begins the Transaction so we can undo it later
-	GEditor->BeginTransaction(FText::FromString("BlenderMode: MoveActor"));
+	// Begins the child transaction
+	GEditor->BeginTransaction(FText());
 
 	// Project the cursor from the screen to the world
 	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
@@ -124,8 +136,8 @@ void FRotateMode::ToolBegin()
 {
 	UE_LOG(LogRotateTool, Verbose, TEXT("Begin"));
 
-	// Begins the Transaction so we can undo it later
-	GEditor->BeginTransaction(FText::FromString("BlenderMode: RotateActor"));
+	// Begins the child transaction
+	GEditor->BeginTransaction(FText());
 
 	// Project the cursor from the screen to the world
 	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
@@ -192,8 +204,8 @@ void FScaleMode::ToolBegin()
 {
 	UE_LOG(LogScaleTool, Verbose, TEXT("Begin"));
 
-	// Begins the Transaction so we can undo it later
-	GEditor->BeginTransaction(FText::FromString("BlenderMode: ScaleActor"));
+	// Begins the child transaction
+	GEditor->BeginTransaction(FText());
 	
 	FIntPoint CursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
 
