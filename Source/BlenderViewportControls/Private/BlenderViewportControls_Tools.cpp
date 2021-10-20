@@ -19,7 +19,9 @@ DEFINE_LOG_CATEGORY(LogScaleTool);
 void FBlenderToolMode::ToolBegin()
 {
 	// Change the selection outline color when in ToolMode
+	DefaultSelectionOutlineColor = GEditor->GetSelectionOutlineColor();
 	GEditor->SetSelectionOutlineColor(FLinearColor::White);	
+	
 
 	// Getting a reference to the group actor that is created when the editor mode is activated.
 	TransformGroupActor = ToolHelperFunctions::GetTransformGroupActor();
@@ -55,8 +57,8 @@ void FBlenderToolMode::ToolBegin()
 
 void FBlenderToolMode::ToolClose(bool Success /*= true*/)
 {
-	// TODO: Save the default SelectionOutlineColor on EditorMode start and make it publicly accessible. This might break if users messed with their default outline colors.
-	GEditor->SetSelectionOutlineColor(GEditor->GetSelectedMaterialColor());
+	// Reset the selection outline color
+	GEditor->SetSelectionOutlineColor(DefaultSelectionOutlineColor);
 
 	for (auto& Info : SelectionInfos)
 	{

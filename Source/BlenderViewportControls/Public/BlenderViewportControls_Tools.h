@@ -50,6 +50,7 @@ protected:
 	ATransformGroupActor* TransformGroupActor;
 private:
 	const FText OperationName;
+	FLinearColor DefaultSelectionOutlineColor;
 };
 
 class FMoveMode : public FBlenderToolMode
