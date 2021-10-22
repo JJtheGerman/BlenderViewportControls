@@ -174,7 +174,7 @@ void FBlenderViewportControlsEdMode::ResetSpecificActorTransform(void(*DoReset)(
 	}
 
 	// Start Transaction
-	GEditor->BeginTransaction(FText::FromString("BlenderTool: ResetTransform"));
+	GEditor->BeginTransaction(FText::FromString(TEXT("BlenderTool: ResetTransform")));
 	USelection* SelectedActors = GEditor->GetSelectedActors();
 	for (FSelectionIterator Iter(*SelectedActors); Iter; ++Iter)
 	{
