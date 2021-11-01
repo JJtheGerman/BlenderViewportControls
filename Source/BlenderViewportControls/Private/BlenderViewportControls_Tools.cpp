@@ -2,11 +2,11 @@
 
 #include "BlenderViewportControls_Tools.h"
 #include "BlenderViewportControls_HelperFunctions.h"
-#include "BlenderViewportControls_GroupActor.h"
 #include "ViewportWorldInteraction.h"
 #include "EngineUtils.h"
 #include "DrawDebugHelpers.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Components/LineBatchComponent.h"
 #include "Engine/Selection.h"
 
 DEFINE_LOG_CATEGORY(LogMoveTool);
@@ -21,10 +21,9 @@ void FBlenderToolMode::ToolBegin()
 	// Change the selection outline color when in ToolMode
 	DefaultSelectionOutlineColor = GEditor->GetSelectionOutlineColor();
 	GEditor->SetSelectionOutlineColor(FLinearColor::White);	
-	
 
-	// Getting a reference to the group actor that is created when the editor mode is activated.
-	TransformGroupActor = ToolHelperFunctions::GetTransformGroupActor();
+	// Create a new GroupTransform for this tool
+	GroupTransform = MakeShared<FGroupTransform>();
 
 	USelection* CurrentSelection = GEditor->GetSelectedActors();
 	for (FSelectionIterator Iter(*CurrentSelection); Iter; ++Iter)
@@ -32,27 +31,18 @@ void FBlenderToolMode::ToolBegin()
 		if (AActor* LevelActor = Cast<AActor>(*Iter))
 		{
 			SelectionInfos.Add(FSelectionToolHelper(LevelActor, LevelActor->GetTransform()));
+
+			FIntPoint ActorScreenLocation = ToolHelperFunctions::ProjectWorldLocationToScreen(ToolViewportClient, LevelActor->GetActorLocation());
+			FIntPoint MousePosition = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
+			FIntPoint ScreenSpaceOffset = MousePosition - ActorScreenLocation;
+
+			GroupTransform->AddChild(LevelActor, ScreenSpaceOffset);
 		}
 	}
-
-	// Setting the transform origin to the average location of selection.
-	TransformGroupActor->SetActorLocation(ToolHelperFunctions::GetAverageLocation(GetSelectedActors()));
-	// Zeroing Scale and Rotation to make Actor attach/detach easier.
-	TransformGroupActor->SetActorScale3D(FVector::OneVector);
-	TransformGroupActor->SetActorRotation(FRotator::ZeroRotator);
+	GroupTransform->FinishSetup(ToolViewportClient);
 
 	// Start Parent Transaction
 	GEditor->BeginTransaction(OperationName);
-
-	for (auto& Info : SelectionInfos)
-	{
-		// Mark modified for undo system
-		Info.Actor->Modify();
-		TransformGroupActor->Modify();
-
-		FAttachmentTransformRules AttachRules(FAttachmentTransformRules::KeepWorldTransform);
-		Info.Actor->AttachToActor(TransformGroupActor, AttachRules);
-	}
 }
 
 void FBlenderToolMode::ToolClose(bool Success /*= true*/)
@@ -60,15 +50,6 @@ void FBlenderToolMode::ToolClose(bool Success /*= true*/)
 	// Reset the selection outline color
 	GEditor->SetSelectionOutlineColor(DefaultSelectionOutlineColor);
 
-	for (auto& Info : SelectionInfos)
-	{
-		Info.Actor->Modify();
-
-		FDetachmentTransformRules DetachmentRules(FDetachmentTransformRules::KeepWorldTransform);
-		DetachmentRules.ScaleRule = EDetachmentRule::KeepWorld;
-		Info.Actor->DetachFromActor(DetachmentRules);
-	}
-	
 	// Ends the child transaction
 	GEditor->EndTransaction();
 
@@ -86,6 +67,101 @@ void FBlenderToolMode::ToolClose(bool Success /*= true*/)
 	GEditor->EndTransaction();
 }
 
+void FBlenderToolMode::CalculateAxisLock()
+{
+	// There is nothing to do when we aren't locking anything.
+	if (AxisLockHelper.CurrentLockedAxis == EToolAxisLock::NONE) { return; }
+
+	TArray<EToolAxisLock> LockedAxes;
+	TArray<FVector> LockVectors;
+	TArray<FLinearColor> LineColors;
+
+	// Dual Axis locks need to draw two lines. If a user presses Shift + X for example it will draw the Y and Z axes instead.	
+	if (AxisLockHelper.IsDualAxisLock)
+	{
+		if (AxisLockHelper.CurrentLockedAxis == X)
+		{
+			LockedAxes.Add(EToolAxisLock::Z);
+			LockedAxes.Add(EToolAxisLock::Y);
+		}
+		else if (AxisLockHelper.CurrentLockedAxis == Y)
+		{
+			LockedAxes.Add(EToolAxisLock::X);
+			LockedAxes.Add(EToolAxisLock::Z);
+		}
+		else if (AxisLockHelper.CurrentLockedAxis == Z)
+		{
+			LockedAxes.Add(EToolAxisLock::Y);
+			LockedAxes.Add(EToolAxisLock::X);
+		}
+	}
+	else
+	{
+		LockedAxes.Add(AxisLockHelper.CurrentLockedAxis);
+	}
+
+	bool IsWorldSpace = AxisLockHelper.IsWorldSpace ? true : false;
+	for (const auto& Axis : LockedAxes)
+	{
+		FVector LockVector;
+
+		switch (Axis)
+		{
+		case X:
+			LockVector = IsWorldSpace ? FVector::ForwardVector : GroupTransform->GetLocalForwardVector();
+			AxisLineDrawHelper.Add(FAxisLineDrawHelper(LockVector, FLinearColor::Red));
+			AxisLockHelper.LockVector = LockVector;
+			if (AxisLockHelper.IsDualAxisLock)
+			{
+				AxisLockHelper.LockPlaneNormal = IsWorldSpace ? FVector::UpVector : GroupTransform->GetLocalUpVector();
+			}
+
+			break;
+		case Y:
+			LockVector = IsWorldSpace ? FVector::RightVector : GroupTransform->GetLocalRightVector();
+			AxisLineDrawHelper.Add(FAxisLineDrawHelper(LockVector, FLinearColor::Green));
+			AxisLockHelper.LockVector = LockVector;
+			if (AxisLockHelper.IsDualAxisLock)
+			{
+				AxisLockHelper.LockPlaneNormal = IsWorldSpace ? FVector::ForwardVector : GroupTransform->GetLocalForwardVector();
+			}
+			break;
+		case Z:
+			LockVector = IsWorldSpace ? FVector::UpVector : GroupTransform->GetLocalUpVector();
+			AxisLineDrawHelper.Add(FAxisLineDrawHelper(LockVector, FLinearColor::Blue));
+			AxisLockHelper.LockVector = LockVector;
+			if (AxisLockHelper.IsDualAxisLock)
+			{
+				AxisLockHelper.LockPlaneNormal = IsWorldSpace ? FVector::RightVector : GroupTransform->GetLocalRightVector();
+			}
+			break;
+		}
+	}
+}
+
+void FBlenderToolMode::DrawAxisLocks()
+{
+	const UWorld* World = ToolViewportClient->GetWorld();
+	for (const auto& AxisLine : AxisLineDrawHelper)
+	{
+		ToolHelperFunctions::DrawAxisLine(World, AxisLockHelper.TransformWhenLocked.GetLocation(), AxisLine.LineDirection, AxisLine.LineColor);
+	}
+}
+
+void FBlenderToolMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis)
+{
+	// Remove the lines we are currently drawing
+	AxisLineDrawHelper.Empty();
+
+	AxisLockHelper.CurrentLockedAxis = InAxisToLock;
+	AxisLockHelper.IsDualAxisLock = bDualAxis;
+	AxisLockHelper.TransformWhenLocked = GetGroupTransform()->GetParentTransform();
+
+	// Single selections can toggle between local and world space, but multi selections should always only have local space locking
+	AxisLockHelper.IsWorldSpace = IsSingleSelection() ? !AxisLockHelper.IsWorldSpace : true;
+}
+
+
 
 
 /**
@@ -97,30 +173,43 @@ void FMoveMode::ToolBegin()
 
 	// Begins the child transaction
 	GEditor->BeginTransaction(FText());
-
-	// Project the cursor from the screen to the world
-	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
-	FVector CursorWorldPosition = WorldLocDir.Get<0>();
-	FVector CursorWorldDirection = WorldLocDir.Get<1>();
-
-	// Trace from the cursor onto a plane and get the intersection
-	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionCameraGroup(ToolViewportClient, CursorWorldPosition, CursorWorldDirection, TransformGroupActor);
-
-	// We store an offset for each actor from the cursor so they stay at their relative location when moving
-	SelectionOffset = Intersection - TransformGroupActor->GetActorLocation();
 }
 
 void FMoveMode::ToolUpdate()
 {
-	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
-	FVector CursorWorldPosition = WorldLocDir.Get<0>();
-	FVector CursorWorldDirection = WorldLocDir.Get<1>();
+	CalculateAxisLock();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionCameraGroup(ToolViewportClient, CursorWorldPosition, CursorWorldDirection, TransformGroupActor);
+	FIntPoint ScreenSpaceOffsetLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos() + GroupTransform->GetScreenSpaceOffset();
 
-	TransformGroupActor->Modify();
-	TransformGroupActor->SetActorLocation(CursorIntersection - SelectionOffset);
+	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::ProjectScreenPositionToWorld(ToolViewportClient, ScreenSpaceOffsetLocation);
+	FVector TransformWorldPosition = WorldLocDir.Get<0>();
+	FVector TransformWorldDirection = WorldLocDir.Get<1>();
+
+	FLinePlaneCameraHelper LinePlaneCameraHelper;
+	LinePlaneCameraHelper.PlaneOrigin = GroupTransform->GetOriginLocation();
+	LinePlaneCameraHelper.TraceStartLocation = TransformWorldPosition;
+	LinePlaneCameraHelper.TraceDirection = TransformWorldDirection;
+	LinePlaneCameraHelper.PlaneNormal = GetCameraForwardVector();
+	if (AxisLockHelper.IsDualAxisLock && AxisLockHelper.CurrentLockedAxis != NONE)
+	{
+		LinePlaneCameraHelper.PlaneNormal = AxisLockHelper.LockPlaneNormal;
+	}
+
+	FVector NewLocation = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, LinePlaneCameraHelper);
+
+	// Single Axis Locking
+	FVector LockedLocation = NewLocation;
+	if (!AxisLockHelper.IsDualAxisLock && AxisLockHelper.CurrentLockedAxis != NONE)
+	{
+		LockedLocation = UKismetMathLibrary::FindClosestPointOnLine(NewLocation, GroupTransform->GetOriginLocation(), AxisLockHelper.LockVector);
+	}
+
+	// Draw the visual axis locking lines in the viewport
+	DrawAxisLocks();
+
+	// Set the final position
+	GroupTransform->SetLocation(LockedLocation);
 }
 
 void FMoveMode::ToolClose(bool Success)
@@ -129,7 +218,6 @@ void FMoveMode::ToolClose(bool Success)
 
 	UE_LOG(LogMoveTool, Verbose, TEXT("Closed"));
 }
-
 
 /**
  * Rotate Tool Implementation
@@ -146,27 +234,41 @@ void FRotateMode::ToolBegin()
 	FVector CursorWorldPosition = WorldLocDir.Get<0>();
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
-	// Trace from the cursor onto a plane and get the intersection
-	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionCameraGroup(ToolViewportClient, CursorWorldPosition, CursorWorldDirection, TransformGroupActor);
 
-	LastUpdateMouseRotVector = (Intersection - TransformGroupActor->GetActorLocation()).GetSafeNormal();
+
+	// Trace from the cursor onto a plane and get the intersection
+	FLinePlaneCameraHelper Helper;
+	Helper.TraceStartLocation = CursorWorldPosition;
+	Helper.TraceDirection = CursorWorldDirection;
+	Helper.PlaneOrigin = GroupTransform->GetOriginLocation();
+	Helper.PlaneNormal = GetCameraForwardVector();
+	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, Helper);
+
+	LastUpdateMouseRotVector = (Intersection - GroupTransform->GetOriginLocation()).GetSafeNormal();
 }
 
 void FRotateMode::ToolUpdate()
 {
+	CalculateAxisLock();
+
 	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
 	FVector CursorWorldPosition = WorldLocDir.Get<0>();
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionCameraGroup(ToolViewportClient, CursorWorldPosition, CursorWorldDirection, TransformGroupActor);
+	FLinePlaneCameraHelper Helper;
+	Helper.TraceStartLocation = CursorWorldPosition;
+	Helper.TraceDirection = CursorWorldDirection;
+	Helper.PlaneOrigin = GroupTransform->GetOriginLocation();
+	Helper.PlaneNormal = GetCameraForwardVector();
+	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, Helper);
 
-	FVector currentRotVector = (CursorIntersection - TransformGroupActor->GetActorLocation()).GetSafeNormal();
+	FVector currentRotVector = (CursorIntersection - GroupTransform->GetOriginLocation()).GetSafeNormal();
 
 	// Gives us the degrees between the cursor starting position and end position in -180 - 180;
 	float degreesBetweenVectors = UKismetMathLibrary::DegAcos(FVector::DotProduct(currentRotVector, LastUpdateMouseRotVector));
 
-	// First if check if the camera is looking down or up and flips. Otherwise dragging the mouse left would rotate the object
+	// First check if the camera is looking down or up and flips. Otherwise dragging the mouse left would rotate the object
 	// to the right whenever we are looking from below. (Hard to explain, just uncomment the first "if" statement to see the behavior.
 	if (ToolViewportClient->GetViewRotation().Vector().Z > 0)
 	{
@@ -177,17 +279,29 @@ void FRotateMode::ToolUpdate()
 		degreesBetweenVectors = -degreesBetweenVectors;
 	}
 
-	FRotator AddRotation = UKismetMathLibrary::RotatorFromAxisAndAngle(ToolViewportClient->GetViewRotation().Vector(), degreesBetweenVectors);
+	// Set the rotation axis. Its determined by the active axis lock. 
+	// Some extra inverting of the axis needs to be done depending on camera position for the mouse interaction to work as a "human" would expect it to.
+	FVector LockedRotationAxis;
+	LockedRotationAxis = AxisLockHelper.LockVector * (FVector::DotProduct(AxisLockHelper.LockVector, GetCameraForwardVector()) < 0 ? -1.f : 1.f);
+	if (AxisLockHelper.CurrentLockedAxis == NONE)
+	{
+		LockedRotationAxis = ToolViewportClient->GetViewRotation().Vector();
+	}
+
+	FRotator AddRotation = UKismetMathLibrary::RotatorFromAxisAndAngle(LockedRotationAxis, degreesBetweenVectors);
 
 	if (LastCursorLocation == ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos())
 	{
 		AddRotation = FRotator::ZeroRotator;
-	}
+	}	
 
-	TransformGroupActor->AddActorWorldRotation(AddRotation);
+	FVector Origin = GroupTransform->GetOriginLocation();
+	GroupTransform->AddRotation(AddRotation);
 
-	LastUpdateMouseRotVector = (CursorIntersection - TransformGroupActor->GetActorLocation()).GetSafeNormal();
+	LastUpdateMouseRotVector = (CursorIntersection - GroupTransform->GetOriginLocation()).GetSafeNormal();
 	LastCursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
+
+	DrawAxisLocks();
 }
 
 void FRotateMode::ToolClose(bool Success)
@@ -196,6 +310,15 @@ void FRotateMode::ToolClose(bool Success)
 
 	UE_LOG(LogRotateTool, Verbose, TEXT("Closed"));
 }
+
+void FRotateMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis)
+{
+	FBlenderToolMode::SetAxisLock(InAxisToLock, bDualAxis);
+
+	// The rotate tool doesn't support two axis rotation because it doesn't make sense
+	AxisLockHelper.IsDualAxisLock = false;
+}
+
 
 
 
@@ -211,7 +334,7 @@ void FScaleMode::ToolBegin()
 	
 	FIntPoint CursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
 
-	ActorScreenPosition = ToolHelperFunctions::ProjectWorldLocationToScreen(ToolViewportClient, TransformGroupActor->GetActorLocation());
+	ActorScreenPosition = ToolHelperFunctions::ProjectWorldLocationToScreen(ToolViewportClient, GroupTransform->GetOriginLocation());
 	StartDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
 }
 
@@ -221,13 +344,80 @@ void FScaleMode::ToolUpdate()
 
 	float CurrentDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
 	float NewScaleMultiplier = CurrentDistance / StartDistance;
-
-	TransformGroupActor->Modify();
-	TransformGroupActor->SetActorScale3D(FVector(NewScaleMultiplier));
+	
+	GroupTransform->SetScale(FVector(NewScaleMultiplier));
 }
 
 void FScaleMode::ToolClose(bool Success)
 {
 	FBlenderToolMode::ToolClose(Success);
 	UE_LOG(LogScaleTool, Verbose, TEXT("Closed"));
+}
+
+void FGroupTransform::SetScale(const FVector& InNewScale)
+{
+	for (const FChildTransform& Child : Children)
+	{
+		FVector NewRelScale = InNewScale * Parent.GetSafeScaleReciprocal(Parent.GetScale3D());
+		Child.Actor->SetActorScale3D(NewRelScale);
+	}
+}
+
+void FGroupTransform::SetAverageLocation()
+{
+	FVector averageLocation = FVector::ZeroVector;
+	for (auto& Child : Children)
+	{
+		averageLocation += Child.Actor->GetActorLocation();
+	}
+	averageLocation /= Children.Num();
+	Parent.SetLocation(averageLocation);
+}
+
+void FGroupTransform::AddRotation(const FRotator& InAddRotation)
+{
+	FTransform RotationAroundParent = FTransform(-Parent.GetLocation()) * FTransform(InAddRotation.Quaternion()) * FTransform(Parent.GetLocation());
+	for (auto& Child : Children)
+	{
+		FTransform RotatedTransform = Child.Actor->GetTransform() * RotationAroundParent;
+
+		Child.Actor->Modify();
+		Child.Actor->SetActorTransform(RotatedTransform);
+	}
+}
+
+void FGroupTransform::SetLocation(const FVector& InNewLocation)
+{
+	Parent.SetLocation(InNewLocation);
+
+	for (auto& Child : Children)
+	{
+		FVector RelativeLocation = -Child.RelativeOffset + Parent.GetLocation();
+
+		Child.Actor->Modify();
+		Child.Actor->SetActorLocation(RelativeLocation);
+	}
+}
+
+void FGroupTransform::AddChild(AActor* NewChild, const FIntPoint& InScreenspaceOffset)
+{
+	Children.Add(FChildTransform(NewChild, InScreenspaceOffset));
+}
+
+void FGroupTransform::FinishSetup(FEditorViewportClient* InViewportClient)
+{
+	SetAverageLocation();
+	Parent.SetRotation(Children[0].ChildTransform.GetRotation());
+
+	for (auto& Child : Children)
+	{
+		Child.RelativeOffset = Parent.GetLocation() - Child.ChildTransform.GetLocation();
+	}
+
+	// Calculate the screen space offset between the transform origin and the cursor
+	FIntPoint CursorPosition = InViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
+	FIntPoint TransformScreenPosition = ToolHelperFunctions::ProjectWorldLocationToScreen(InViewportClient, GetOriginLocation());
+
+	ScreenSpaceParentCursorOffset = TransformScreenPosition - CursorPosition;
+	CurrentWorld = InViewportClient->GetWorld();
 }

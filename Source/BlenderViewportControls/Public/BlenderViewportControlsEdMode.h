@@ -32,7 +32,7 @@ protected:
 
 	bool HasActiveSelection();
 
-	void CreateTransformActor();
+	void DuplicateSelection(FEditorViewportClient* InViewportClient);
 
 	/** Delegate handle for registered selection change lambda */
 	FDelegateHandle SelectionChangedHandle;

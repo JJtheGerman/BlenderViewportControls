@@ -2,7 +2,6 @@
 
 #include "BlenderViewportControlsEdMode.h"
 #include "BlenderViewportControls_Tools.h"
-#include "BlenderViewportControls_GroupActor.h"
 #include "BlenderViewportControls_HelperFunctions.h"
 #include "Toolkits/ToolkitManager.h"
 #include "EditorModeManager.h"
@@ -29,10 +28,6 @@ void FBlenderViewportControlsEdMode::Enter()
 		if (ActiveToolMode) { ActiveToolMode->ToolClose(false); }
 		ActiveToolMode = nullptr;
 	});
-
-	// An empty actor that exists so we can simplify multi object transforms. Instead of doing a whole lot of math
-	// we simply parent selected objects directly to it and modify the transform actor instead
-	CreateTransformActor();
 }
 
 /** FEdMode: Called when user Exits the Mode */
@@ -40,9 +35,6 @@ void FBlenderViewportControlsEdMode::Exit()
 {
 	// Unbind delegates
 	USelection::SelectionChangedEvent.Remove(SelectionChangedHandle);
-
-	// Destroy the group actor when we exit the editor mode
-	TransformGroupActor->Destroy();
 
 	// Call base Exit method to ensure proper cleanup
 	FEdMode::Exit();
@@ -117,21 +109,26 @@ bool FBlenderViewportControlsEdMode::InputKey(FEditorViewportClient* InViewportC
 	// E.g Ctrl + Z would not work without this.
 	if (IsOperationInProgress())
 	{
+		bool IsDualAxisLock = bShiftDown;
+
 		// Constrain to X axis
 		if (InKey == EKeys::X && InEvent != IE_Released)
 		{
+			ActiveToolMode->SetAxisLock(X, IsDualAxisLock);
 			return true;
 		}
 
 		// Constrain to Y axis
 		if (InKey == EKeys::Y && InEvent != IE_Released)
 		{
+			ActiveToolMode->SetAxisLock(Y, IsDualAxisLock);
 			return true;
 		}
 
 		// Constrain to Z axis
 		if (InKey == EKeys::Z && InEvent != IE_Released)
 		{
+			ActiveToolMode->SetAxisLock(Z, IsDualAxisLock);
 			return true;
 		}
 	}
@@ -158,6 +155,16 @@ bool FBlenderViewportControlsEdMode::InputKey(FEditorViewportClient* InViewportC
 		if (InKey == EKeys::S && InEvent != IE_Released && bAltDown)
 		{
 			ResetSpecificActorTransform([](AActor* Actor) { Actor->SetActorScale3D(FVector::OneVector); });
+			return true;
+		}
+	}
+
+	/** Duplicate Selection */
+	if (!IsOperationInProgress())
+	{
+		if (InKey == EKeys::D && InEvent != IE_Released && bShiftDown)
+		{
+			DuplicateSelection(InViewportClient);
 			return true;
 		}
 	}
@@ -208,30 +215,12 @@ bool FBlenderViewportControlsEdMode::HasActiveSelection()
 	return GEditor->GetSelectedActorCount() > 0 ? true : false;
 }
 
-void FBlenderViewportControlsEdMode::CreateTransformActor()
+void FBlenderViewportControlsEdMode::DuplicateSelection(FEditorViewportClient* InViewportClient)
 {
-	UWorld* World = GetWorld();
-	const bool bWasWorldPackageDirty = World->GetOutermost()->IsDirty();
+	GEditor->BeginTransaction(FText::FromString(TEXT("BlenderTool: Duplicate")));
+	GEditor->edactDuplicateSelected(GetWorld()->GetCurrentLevel(), false);
 
-	FActorSpawnParameters ActorSpawnParameters;
-	ActorSpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	ActorSpawnParameters.ObjectFlags = EObjectFlags::RF_Transient | EObjectFlags::RF_DuplicateTransient;
-	ActorSpawnParameters.bHideFromSceneOutliner = true;
-
-	AActor* NewActor = World->SpawnActor<AActor>(ATransformGroupActor::StaticClass(), ActorSpawnParameters);
-
-	// Give the new actor a root scene component, so we can attach multiple sibling components to it
-	USceneComponent* SceneComponent = NewObject<USceneComponent>(NewActor);
-	SceneComponent->SetMobility(EComponentMobility::Static);
-	NewActor->AddOwnedComponent(SceneComponent);
-	NewActor->SetRootComponent(SceneComponent);
-	SceneComponent->RegisterComponent();
-
-	// Don't dirty the level file after spawning
-	if (!bWasWorldPackageDirty)
-	{
-		World->GetOutermost()->SetDirtyFlag(false);
-	}
-
-	TransformGroupActor = CastChecked<ATransformGroupActor>(NewActor);
+	// We want to activate the move tool right away after duplication so the user can easily move the duplicates.
+	ActiveToolMode = MakeShared<FMoveMode>(InViewportClient, FText::FromString(TEXT("BlenderTool: Duplicate")));
+	GEditor->EndTransaction();
 }

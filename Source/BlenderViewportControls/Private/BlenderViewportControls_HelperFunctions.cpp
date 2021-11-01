@@ -3,9 +3,10 @@
 #include "BlenderViewportControls_HelperFunctions.h"
 #include "ViewportWorldInteraction.h"
 #include "BlenderViewportControlsEdMode.h"
-#include "BlenderViewportControls_GroupActor.h"
+#include "BlenderViewportControls_Tools.h"
 #include "EngineUtils.h"
 #include "EditorModeManager.h"
+#include "Components/LineBatchComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/Selection.h"
 
@@ -21,15 +22,24 @@ TTuple<FVector, FVector> ToolHelperFunctions::GetCursorWorldPosition(class FEdit
 	return TTuple<FVector, FVector>(CursorWorldPosition, CursorWorldDirection);
 }
 
-FVector ToolHelperFunctions::LinePlaneIntersectionCameraGroup(class FEditorViewportClient* InViewportClient, FVector InCursorWorldPos, FVector InCursorWorldDir, AActor* InTransformGroupActor)
+TTuple<FVector, FVector> ToolHelperFunctions::ProjectScreenPositionToWorld(class FEditorViewportClient* InViewportClient, const FIntPoint& InScreenPosition)
+{
+	FSceneView* View = GetSceneView(InViewportClient);
+
+	FVector CursorWorldPosition, CursorWorldDirection;
+	View->DeprojectFVector2D(InScreenPosition, CursorWorldPosition, CursorWorldDirection);
+
+	return TTuple<FVector, FVector>(CursorWorldPosition, CursorWorldDirection);
+}
+
+FVector ToolHelperFunctions::LinePlaneIntersectionFromCamera(class FEditorViewportClient* InViewportClient, const FLinePlaneCameraHelper& InHelper)
 {
 	FVector OutIntersection;
 	float T;
 
-	FVector ScreenSpacePlaneNormal = InViewportClient->GetViewRotation().Vector();
 	// TODO?: This 100000 should probably be replaced with the actual distance + some extra between the cursor Pos and ObjectPosition
-	UKismetMathLibrary::LinePlaneIntersection_OriginNormal(InCursorWorldPos, InCursorWorldPos + (InCursorWorldDir * 100000),
-		InTransformGroupActor->GetActorLocation(), ScreenSpacePlaneNormal, T, OutIntersection);
+	UKismetMathLibrary::LinePlaneIntersection_OriginNormal(InHelper.TraceStartLocation, InHelper.TraceStartLocation + (InHelper.TraceDirection * 10000000),
+		InHelper.PlaneOrigin, InHelper.PlaneNormal, T, OutIntersection);
 
 	return OutIntersection;
 }
@@ -85,4 +95,16 @@ FVector ToolHelperFunctions::GetAverageLocation(const TArray<AActor*>& SelectedA
 	}
 
 	return AverageLocation / SelectedActors.Num();
+}
+
+void ToolHelperFunctions::DrawAxisLine(const UWorld* InWorld, const FVector& InLineOrigin, const FVector& InLineDirection, const FLinearColor& InLineColor)
+{
+	const float LineThickness = 3.f;
+	const float LifeTime = 1.f;
+	const float LineLength = 10000.f;
+
+	FVector LineStart = InLineOrigin + (InLineDirection * LineLength);
+	FVector LineEnd = InLineOrigin + (-InLineDirection * LineLength);
+
+	InWorld->LineBatcher->DrawLine(LineStart, LineEnd, InLineColor, 0, LineThickness, LifeTime);
 }
