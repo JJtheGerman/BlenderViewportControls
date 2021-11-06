@@ -24,6 +24,7 @@ struct FAxisLockHelper
 	FTransform TransformWhenLocked = FTransform::Identity;
 	FVector LockVector = FVector::ZeroVector;
 	FVector LockPlaneNormal = FVector::ZeroVector;
+	bool isLocked() { return CurrentLockedAxis != NONE ? true : false; };
 };
 
 struct FGroupTransform
@@ -31,10 +32,10 @@ struct FGroupTransform
 	struct FChildTransform
 	{
 		FChildTransform(AActor* InActor, const FIntPoint& InScreenSpaceOffset)
-			: Actor(InActor), ChildTransform(InActor->GetTransform()), ScreenSpaceOffset(InScreenSpaceOffset) {};
+			: Actor(InActor), ChildOriginalTransform(InActor->GetTransform()), ScreenSpaceOffset(InScreenSpaceOffset) {};
 
 		AActor* Actor;
-		FTransform ChildTransform;
+		FTransform ChildOriginalTransform;
 		FVector RelativeOffset;
 		FIntPoint ScreenSpaceOffset;
 	};
@@ -51,7 +52,7 @@ struct FGroupTransform
 	void SetTransform(FTransform InTransform) {};
 	void AddRotation(const FRotator& InAddRotation);
 	void SetLocation(const FVector& InNewLocation);
-	void SetScale(const FVector& InNewScale);
+	void SetScale(const FVector& InNewScale, const FVector& ScaleAxis, bool bUniformScale);
 	void AddChild(AActor* NewChild, const FIntPoint& InScreenspaceOffset);
 	void FinishSetup(class FEditorViewportClient* InViewportClient);
 
@@ -61,6 +62,7 @@ public:
 
 private:
 	FTransform Parent;
+	FTransform ParentOriginalTransform;
 	FIntPoint ScreenSpaceParentCursorOffset;
 	TArray<FChildTransform> Children;
 	const UWorld* CurrentWorld;

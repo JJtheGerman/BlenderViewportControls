@@ -340,12 +340,15 @@ void FScaleMode::ToolBegin()
 
 void FScaleMode::ToolUpdate()
 {
+	CalculateAxisLock();
+
 	FIntPoint CursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
 
 	float CurrentDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
 	float NewScaleMultiplier = CurrentDistance / StartDistance;
-	
-	GroupTransform->SetScale(FVector(NewScaleMultiplier));
+
+	GroupTransform->SetScale(FVector(NewScaleMultiplier), AxisLockHelper.LockVector, !AxisLockHelper.isLocked());
+	DrawAxisLocks();
 }
 
 void FScaleMode::ToolClose(bool Success)
@@ -354,12 +357,41 @@ void FScaleMode::ToolClose(bool Success)
 	UE_LOG(LogScaleTool, Verbose, TEXT("Closed"));
 }
 
-void FGroupTransform::SetScale(const FVector& InNewScale)
+
+
+
+void FGroupTransform::SetScale(const FVector& InNewScale, const FVector& ScaleAxis, const bool bUniformScale)
 {
 	for (const FChildTransform& Child : Children)
 	{
-		FVector NewRelScale = InNewScale * Parent.GetSafeScaleReciprocal(Parent.GetScale3D());
-		Child.Actor->SetActorScale3D(NewRelScale);
+		FVector BiasScale;
+		if (!bUniformScale)
+		{
+			FVector newScaleAxis = ScaleAxis;
+
+			float X_Alpha = FMath::Abs(FVector::DotProduct(newScaleAxis, Child.Actor->GetActorForwardVector()));
+			float Y_Alpha = FMath::Abs(FVector::DotProduct(newScaleAxis, Child.Actor->GetActorRightVector()));
+			float Z_Alpha = FMath::Abs(FVector::DotProduct(newScaleAxis, Child.Actor->GetActorUpVector()));
+
+			float x, y, z;
+			x = FMath::Lerp(1.f, InNewScale.X, X_Alpha);
+			y = FMath::Lerp(1.f, InNewScale.Y, Y_Alpha);
+			z = FMath::Lerp(1.f, InNewScale.Z, Z_Alpha);
+
+			BiasScale = FVector(x, y, z);
+		}
+		else
+		{
+			BiasScale = InNewScale;
+		}
+
+		FTransform ScaleTransform = FTransform(FQuat::Identity, FVector::ZeroVector, BiasScale);
+		FTransform ScaleAroundParent = FTransform(-Parent.GetLocation()) * ScaleTransform * FTransform(Parent.GetLocation());
+
+		FTransform NewChildTransform = Child.ChildOriginalTransform * ScaleAroundParent;
+
+		Child.Actor->Modify();
+		Child.Actor->SetActorTransform(NewChildTransform);
 	}
 }
 
@@ -407,11 +439,11 @@ void FGroupTransform::AddChild(AActor* NewChild, const FIntPoint& InScreenspaceO
 void FGroupTransform::FinishSetup(FEditorViewportClient* InViewportClient)
 {
 	SetAverageLocation();
-	Parent.SetRotation(Children[0].ChildTransform.GetRotation());
+	Parent.SetRotation(Children[0].ChildOriginalTransform.GetRotation());
 
 	for (auto& Child : Children)
 	{
-		Child.RelativeOffset = Parent.GetLocation() - Child.ChildTransform.GetLocation();
+		Child.RelativeOffset = Parent.GetLocation() - Child.ChildOriginalTransform.GetLocation();
 	}
 
 	// Calculate the screen space offset between the transform origin and the cursor
@@ -420,4 +452,5 @@ void FGroupTransform::FinishSetup(FEditorViewportClient* InViewportClient)
 
 	ScreenSpaceParentCursorOffset = TransformScreenPosition - CursorPosition;
 	CurrentWorld = InViewportClient->GetWorld();
+	ParentOriginalTransform = Parent;
 }
