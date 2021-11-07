@@ -164,6 +164,11 @@ void FBlenderToolMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDual
 
 
 
+void FBlenderToolMode::AddSnapOffset(const float InOffset)
+{
+	SnapOffset += InOffset;
+}
+
 /**
  * Move Tool Implementation
  */
@@ -179,9 +184,9 @@ void FMoveMode::ToolUpdate()
 {
 	CalculateAxisLock();
 
-	// Trace from the cursor onto a plane and get the intersection
 	FIntPoint ScreenSpaceOffsetLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos() + GroupTransform->GetScreenSpaceOffset();
-
+	
+	// Trace from the cursor onto a plane and get the intersection
 	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::ProjectScreenPositionToWorld(ToolViewportClient, ScreenSpaceOffsetLocation);
 	FVector TransformWorldPosition = WorldLocDir.Get<0>();
 	FVector TransformWorldDirection = WorldLocDir.Get<1>();
@@ -208,8 +213,35 @@ void FMoveMode::ToolUpdate()
 	// Draw the visual axis locking lines in the viewport
 	DrawAxisLocks();
 
-	// Set the final position
-	GroupTransform->SetLocation(LockedLocation);
+	// Surface Snap mode
+	if (IsSurfaceSnapping())
+	{
+		TArray<AActor*> IgnoredActors = GroupTransform->GetAllChildActors();
+		for (auto& Child : GroupTransform->GetChildren())
+		{
+			FIntPoint ChildScreenLocation = Child.ScreenSpaceOffset + ScreenSpaceOffsetLocation;
+			TTuple<FVector, FVector> Test = ToolHelperFunctions::ProjectScreenPositionToWorld(ToolViewportClient, ChildScreenLocation);
+			FVector TraceStart = Test.Get<0>();
+			FVector TraceEnd = Test.Get<1>() * 10000.f;
+			FHitResult OutHit;
+			FCollisionQueryParams QueryParams;
+			QueryParams.AddIgnoredActors(IgnoredActors);
+			if (ToolViewportClient->GetWorld()->LineTraceSingleByChannel(OutHit, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
+			{
+				if (OutHit.bBlockingHit)
+				{
+					FVector NewLocWithSnapOffset = OutHit.ImpactPoint + (OutHit.ImpactNormal * SnapOffset);
+					Child.Actor->SetActorLocation(NewLocWithSnapOffset);
+					Child.Actor->SetActorRotation(UKismetMathLibrary::MakeRotFromZ(OutHit.ImpactNormal));
+				}
+			}
+		}
+	}
+	else
+	{
+		// Set the final position
+		GroupTransform->SetLocation(LockedLocation);
+	}
 }
 
 void FMoveMode::ToolClose(bool Success)
@@ -218,6 +250,8 @@ void FMoveMode::ToolClose(bool Success)
 
 	UE_LOG(LogMoveTool, Verbose, TEXT("Closed"));
 }
+
+
 
 /**
  * Rotate Tool Implementation
@@ -453,4 +487,15 @@ void FGroupTransform::FinishSetup(FEditorViewportClient* InViewportClient)
 	ScreenSpaceParentCursorOffset = TransformScreenPosition - CursorPosition;
 	CurrentWorld = InViewportClient->GetWorld();
 	ParentOriginalTransform = Parent;
+}
+
+TArray<AActor*> FGroupTransform::GetAllChildActors()
+{
+	TArray<AActor*> OutActors;
+	for (auto& Child : Children)
+	{
+		OutActors.Add(Child.Actor);
+	}
+
+	return OutActors;
 }

@@ -59,6 +59,8 @@ struct FGroupTransform
 public:
 	int32 GetNumChildren() { return Children.Num(); };
 	FIntPoint GetScreenSpaceOffset() { return ScreenSpaceParentCursorOffset; };
+	TArray<FChildTransform> GetChildren() { return Children; };
+	TArray<AActor*> GetAllChildActors();
 
 private:
 	FTransform Parent;
@@ -108,6 +110,7 @@ public:
 	TSharedPtr<FGroupTransform> GetGroupTransform() { return GroupTransform; };
 
 	virtual void SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis);
+	virtual void AddSnapOffset(const float InOffset);
 	bool IsSingleSelection() { return SelectionInfos.Num() == 1 ? true : false; }
 
 protected:
@@ -121,6 +124,7 @@ protected:
 	TSharedPtr<FGroupTransform> GroupTransform;
 	TArray<FSelectionToolHelper> SelectionInfos;
 	FAxisLockHelper AxisLockHelper;
+	float SnapOffset = 0.f;
 private:
 	const FText OperationName;
 	FLinearColor DefaultSelectionOutlineColor;
@@ -139,6 +143,8 @@ public:
 	virtual void ToolBegin() override;
 	virtual void ToolUpdate() override;
 	virtual void ToolClose(bool Success) override;
+
+	bool IsSurfaceSnapping() { return ToolViewportClient->IsCtrlPressed(); };
 
 private:
 

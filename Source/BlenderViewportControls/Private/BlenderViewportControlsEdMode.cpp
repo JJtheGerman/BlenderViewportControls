@@ -104,6 +104,22 @@ bool FBlenderViewportControlsEdMode::InputKey(FEditorViewportClient* InViewportC
 		}
 	}
 
+	/** Snap Offset Increments **/
+	if (IsOperationInProgress() && bControlDown)
+	{
+		if (InKey == EKeys::MouseScrollUp)
+		{
+			ActiveToolMode->AddSnapOffset(1.f);
+			return true;
+		}
+
+		if (InKey == EKeys::MouseScrollDown)
+		{
+			ActiveToolMode->AddSnapOffset(-1.f);
+			return true;
+		}
+	}
+
 	/**  Axis Constraints **/
 	// Only check these binds when we are in an active tool mode so we don't consume default editor input.
 	// E.g Ctrl + Z would not work without this.
