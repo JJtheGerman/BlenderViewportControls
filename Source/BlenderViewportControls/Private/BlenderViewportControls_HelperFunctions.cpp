@@ -108,3 +108,38 @@ void ToolHelperFunctions::DrawAxisLine(const UWorld* InWorld, const FVector& InL
 
 	InWorld->LineBatcher->DrawLine(LineStart, LineEnd, InLineColor, 0, LineThickness, LifeTime);
 }
+
+void ToolHelperFunctions::DrawDashedLine(FCanvas* InCanvas, const FVector& InLineStart, const FVector& InLineEnd, const float InLineThickness, const float InDashSize, const FLinearColor& InLineColor)
+{
+	FBatchedElements* BatchedElements = InCanvas->GetBatchedElements(FCanvas::ET_Line);
+	FHitProxyId HitProxyId = InCanvas->GetHitProxyId();
+
+	// Draw multiple lines between start and end point so it looks dashed
+	{
+		FVector LineDir = InLineEnd - InLineStart;
+		float LineLeft = (InLineEnd - InLineStart).Size();
+		if (LineLeft)
+		{
+			LineDir /= LineLeft;
+		}
+
+		const int32 nLines = FMath::CeilToInt(LineLeft / (InDashSize * 2));
+		const FVector Dash = (InDashSize * LineDir);
+
+		FVector DrawStart = InLineStart;
+		while (LineLeft > InDashSize)
+		{
+			const FVector DrawEnd = DrawStart + Dash;
+
+			BatchedElements->AddLine(DrawStart, DrawEnd, InLineColor, HitProxyId, InLineThickness);
+
+			LineLeft -= 2 * InDashSize;
+			DrawStart = DrawEnd + Dash;
+		}
+		if (LineLeft > 0.0f)
+		{
+			const FVector DrawEnd = InLineEnd;
+			BatchedElements->AddLine(DrawStart, DrawEnd, InLineColor, HitProxyId, InLineThickness);
+		}
+	}
+}

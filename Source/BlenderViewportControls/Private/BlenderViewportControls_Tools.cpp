@@ -268,8 +268,6 @@ void FRotateMode::ToolBegin()
 	FVector CursorWorldPosition = WorldLocDir.Get<0>();
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
-
-
 	// Trace from the cursor onto a plane and get the intersection
 	FLinePlaneCameraHelper Helper;
 	Helper.TraceStartLocation = CursorWorldPosition;
@@ -345,6 +343,16 @@ void FRotateMode::ToolClose(bool Success)
 	UE_LOG(LogRotateTool, Verbose, TEXT("Closed"));
 }
 
+void FRotateMode::DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas)
+{
+	FVector2D MousePosition = ViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
+	const FVector LineStart = FVector(MousePosition.X, MousePosition.Y, 0.f);
+	const FVector LineEnd = FVector(GroupTransform->GetOriginScreenLocation());
+	
+	// Draw a dashed line between the origin and the cursor
+	ToolHelperFunctions::DrawDashedLine(Canvas, LineStart, LineEnd);
+}
+
 void FRotateMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis)
 {
 	FBlenderToolMode::SetAxisLock(InAxisToLock, bDualAxis);
@@ -352,6 +360,7 @@ void FRotateMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis)
 	// The rotate tool doesn't support two axis rotation because it doesn't make sense
 	AxisLockHelper.IsDualAxisLock = false;
 }
+
 
 
 
@@ -389,6 +398,16 @@ void FScaleMode::ToolClose(bool Success)
 {
 	FBlenderToolMode::ToolClose(Success);
 	UE_LOG(LogScaleTool, Verbose, TEXT("Closed"));
+}
+
+void FScaleMode::DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas)
+{
+	FVector2D MousePosition = ViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
+	const FVector LineStart = FVector(MousePosition.X, MousePosition.Y, 0.f);
+	const FVector LineEnd = FVector(GroupTransform->GetOriginScreenLocation());
+
+	// Draw a dashed line between the origin and the cursor
+	ToolHelperFunctions::DrawDashedLine(Canvas, LineStart, LineEnd);
 }
 
 
@@ -487,6 +506,9 @@ void FGroupTransform::FinishSetup(FEditorViewportClient* InViewportClient)
 	ScreenSpaceParentCursorOffset = TransformScreenPosition - CursorPosition;
 	CurrentWorld = InViewportClient->GetWorld();
 	ParentOriginalTransform = Parent;
+
+	// Origin location in screen-space used for line drawing
+	OriginScreenLocation = ToolHelperFunctions::ProjectWorldLocationToScreen(InViewportClient, Parent.GetLocation());
 }
 
 TArray<AActor*> FGroupTransform::GetAllChildActors()

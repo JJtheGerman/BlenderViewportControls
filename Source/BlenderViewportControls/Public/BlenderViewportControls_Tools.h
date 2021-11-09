@@ -8,6 +8,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogMoveTool, Display, All);
 DECLARE_LOG_CATEGORY_EXTERN(LogRotateTool, Display, All);
 DECLARE_LOG_CATEGORY_EXTERN(LogScaleTool, Display, All);
 
+
 enum EToolAxisLock
 {
 	X,
@@ -61,11 +62,13 @@ public:
 	FIntPoint GetScreenSpaceOffset() { return ScreenSpaceParentCursorOffset; };
 	TArray<FChildTransform> GetChildren() { return Children; };
 	TArray<AActor*> GetAllChildActors();
+	FIntPoint GetOriginScreenLocation() { return OriginScreenLocation; };
 
 private:
 	FTransform Parent;
 	FTransform ParentOriginalTransform;
 	FIntPoint ScreenSpaceParentCursorOffset;
+	FIntPoint OriginScreenLocation;
 	TArray<FChildTransform> Children;
 	const UWorld* CurrentWorld;
 };
@@ -89,6 +92,8 @@ public:
 	virtual void ToolBegin();
 	virtual void ToolUpdate() {};
 	virtual void ToolClose(bool Success);
+
+	virtual void DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas) {};
 
 	struct FSelectionToolHelper
 	{
@@ -164,6 +169,7 @@ public:
 	virtual void ToolUpdate() override;
 	virtual void ToolClose(bool Success) override;
 
+	virtual void DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas) override;
 	virtual void SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis) override;
 
 private:
@@ -184,6 +190,8 @@ public:
 	virtual void ToolBegin() override;
 	virtual void ToolUpdate() override;
 	virtual void ToolClose(bool Success) override;
+
+	virtual void DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas) override;
 
 private:
 	float StartDistance;

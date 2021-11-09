@@ -50,6 +50,15 @@ void FBlenderViewportControlsEdMode::Tick(FEditorViewportClient* InViewportClien
 	}
 }
 
+void FBlenderViewportControlsEdMode::DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas)
+{
+	if (ActiveToolMode)
+	{
+		// Let Tools draw their own viewport HUD visualizations
+		ActiveToolMode->DrawHUD(ViewportClient, Viewport, View, Canvas);
+	}
+}
+
 /** FEdMode: Called when a key is pressed */
 bool FBlenderViewportControlsEdMode::InputKey(FEditorViewportClient* InViewportClient, FViewport* InViewport, FKey InKey, EInputEvent InEvent)
 {
