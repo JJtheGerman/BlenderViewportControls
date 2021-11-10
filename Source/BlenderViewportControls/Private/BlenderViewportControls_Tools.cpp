@@ -191,7 +191,7 @@ void FMoveMode::ToolUpdate()
 	FVector TransformWorldPosition = WorldLocDir.Get<0>();
 	FVector TransformWorldDirection = WorldLocDir.Get<1>();
 
-	FLinePlaneCameraHelper LinePlaneCameraHelper;
+	FLinePlaneIntersectionHelper LinePlaneCameraHelper;
 	LinePlaneCameraHelper.PlaneOrigin = GroupTransform->GetOriginLocation();
 	LinePlaneCameraHelper.TraceStartLocation = TransformWorldPosition;
 	LinePlaneCameraHelper.TraceDirection = TransformWorldDirection;
@@ -269,7 +269,7 @@ void FRotateMode::ToolBegin()
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FLinePlaneCameraHelper Helper;
+	FLinePlaneIntersectionHelper Helper;
 	Helper.TraceStartLocation = CursorWorldPosition;
 	Helper.TraceDirection = CursorWorldDirection;
 	Helper.PlaneOrigin = GroupTransform->GetOriginLocation();
@@ -288,7 +288,7 @@ void FRotateMode::ToolUpdate()
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
 	// Trace from the cursor onto a plane and get the intersection
-	FLinePlaneCameraHelper Helper;
+	FLinePlaneIntersectionHelper Helper;
 	Helper.TraceStartLocation = CursorWorldPosition;
 	Helper.TraceDirection = CursorWorldDirection;
 	Helper.PlaneOrigin = GroupTransform->GetOriginLocation();

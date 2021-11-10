@@ -32,7 +32,7 @@ TTuple<FVector, FVector> ToolHelperFunctions::ProjectScreenPositionToWorld(class
 	return TTuple<FVector, FVector>(CursorWorldPosition, CursorWorldDirection);
 }
 
-FVector ToolHelperFunctions::LinePlaneIntersectionFromCamera(class FEditorViewportClient* InViewportClient, const FLinePlaneCameraHelper& InHelper)
+FVector ToolHelperFunctions::LinePlaneIntersectionFromCamera(class FEditorViewportClient* InViewportClient, const FLinePlaneIntersectionHelper& InHelper)
 {
 	FVector OutIntersection;
 	float T;

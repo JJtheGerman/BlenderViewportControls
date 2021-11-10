@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "EdMode.h"
 
-struct FLinePlaneCameraHelper
+struct FLinePlaneIntersectionHelper
 {
 	FVector TraceStartLocation;
 	FVector TraceDirection;
@@ -30,7 +30,7 @@ public:
 	static TTuple<FVector, FVector> ProjectScreenPositionToWorld(class FEditorViewportClient* InViewportClient, const FIntPoint& InScreenPosition);
 
 	/** Trace from cursor to InTransformGroupActor and get a plane intersection where the plane normal is based on the camera forward vector */
-	static FVector LinePlaneIntersectionFromCamera(class FEditorViewportClient* InViewportClient, const FLinePlaneCameraHelper& InLinePlaneCameraHelper);
+	static FVector LinePlaneIntersectionFromCamera(class FEditorViewportClient* InViewportClient, const FLinePlaneIntersectionHelper& InLinePlaneCameraHelper);
 
 	/** InClampValues will clamp values so they can't be negative. Otherwise it is possible to have values that are outside of the viewport */
 	static FIntPoint ProjectWorldLocationToScreen(class FEditorViewportClient* InViewportClient, FVector InWorldSpaceLocation, bool InClampValues = false);
