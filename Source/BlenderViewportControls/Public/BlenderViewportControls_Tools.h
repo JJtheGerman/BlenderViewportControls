@@ -118,6 +118,7 @@ public:
 	virtual void AddSnapOffset(const float InOffset);
 	bool IsSingleSelection() { return SelectionInfos.Num() == 1 ? true : false; }
 	FText GetOperationName() { return OperationName; };
+	FIntPoint GetCursorPosition() { return ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos(); };
 
 protected:
 

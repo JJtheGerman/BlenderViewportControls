@@ -33,8 +33,7 @@ void FBlenderToolMode::ToolBegin()
 			SelectionInfos.Add(FSelectionToolHelper(LevelActor, LevelActor->GetTransform()));
 
 			FIntPoint ActorScreenLocation = ToolHelperFunctions::ProjectWorldLocationToScreen(ToolViewportClient, LevelActor->GetActorLocation());
-			FIntPoint MousePosition = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
-			FIntPoint ScreenSpaceOffset = MousePosition - ActorScreenLocation;
+			FIntPoint ScreenSpaceOffset = GetCursorPosition() - ActorScreenLocation;
 
 			GroupTransform->AddChild(LevelActor, ScreenSpaceOffset);
 		}
@@ -181,7 +180,7 @@ void FMoveMode::ToolUpdate()
 {
 	CalculateAxisLock();
 
-	FIntPoint ScreenSpaceOffsetLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos() + GroupTransform->GetScreenSpaceOffset();
+	FIntPoint ScreenSpaceOffsetLocation = GetCursorPosition() + GroupTransform->GetScreenSpaceOffset();
 	
 	// Trace from the cursor onto a plane and get the intersection
 	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::ProjectScreenPositionToWorld(ToolViewportClient, ScreenSpaceOffsetLocation);
@@ -213,6 +212,7 @@ void FMoveMode::ToolUpdate()
 	// Surface Snap mode
 	if (IsSurfaceSnapping())
 	{
+		// Surface Snap snaps individual children and doesn't care about the GroupTransform
 		TArray<AActor*> IgnoredActors = GroupTransform->GetAllChildActors();
 		for (auto& Child : GroupTransform->GetChildren())
 		{
@@ -322,7 +322,7 @@ void FRotateMode::ToolUpdate()
 	}
 
 	// If the mouse did not move between frames we make sure that the output rotation is definitely 0
-	if (LastCursorLocation == ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos())
+	if (LastCursorLocation == GetCursorPosition())
 	{
 		RotationAngle = 0.f;
 	}
@@ -349,7 +349,7 @@ void FRotateMode::ToolUpdate()
 	
 
 	LastUpdateMouseRotVector = (CursorIntersection - GroupTransform->GetOriginLocation()).GetSafeNormal();
-	LastCursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
+	LastCursorLocation = GetCursorPosition();
 	LastFrameAngle = RotationAngle;
 
 	DrawAxisLocks();
@@ -364,7 +364,7 @@ void FRotateMode::ToolClose(bool Success)
 
 void FRotateMode::DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas)
 {
-	FVector2D MousePosition = ViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
+	FVector2D MousePosition = GetCursorPosition();
 	const FVector LineStart = FVector(MousePosition.X, MousePosition.Y, 0.f);
 	const FVector LineEnd = FVector(GroupTransform->GetOriginScreenLocation());
 	
@@ -413,20 +413,16 @@ void FScaleMode::ToolBegin()
 
 	// Begins the child transaction
 	GEditor->BeginTransaction(FText());
-	
-	FIntPoint CursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
 
 	ActorScreenPosition = ToolHelperFunctions::ProjectWorldLocationToScreen(ToolViewportClient, GroupTransform->GetOriginLocation());
-	StartDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
+	StartDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)GetCursorPosition());
 }
 
 void FScaleMode::ToolUpdate()
 {
 	CalculateAxisLock();
 
-	FIntPoint CursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
-
-	float CurrentDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)CursorLocation);
+	float CurrentDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)GetCursorPosition());
 	float NewScaleMultiplier = CurrentDistance / StartDistance;
 
 	GroupTransform->SetScale(FVector(NewScaleMultiplier), AxisLockHelper.LockVector, !AxisLockHelper.isLocked());
@@ -441,7 +437,7 @@ void FScaleMode::ToolClose(bool Success)
 
 void FScaleMode::DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas)
 {
-	FVector2D MousePosition = ViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
+	FVector2D MousePosition = GetCursorPosition();
 	const FVector LineStart = FVector(MousePosition.X, MousePosition.Y, 0.f);
 	const FVector LineEnd = FVector(GroupTransform->GetOriginScreenLocation());
 
