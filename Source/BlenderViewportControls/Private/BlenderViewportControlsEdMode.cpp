@@ -101,7 +101,17 @@ bool FBlenderViewportControlsEdMode::InputKey(FEditorViewportClient* InViewportC
 		// Enter Actor Rotate Mode
 		if (InKey == EKeys::R && InEvent != IE_Released)
 		{
-			ActiveToolMode = MakeShared<FRotateMode>(InViewportClient, FText::FromString(TEXT("BlenderTool: Rotate")));
+			// The Rotate tool has a special trackball rotation mode that can be entered by pressing R again while the RotateMode is active
+			if (IsOperationInProgress() && IsRotateMode())
+			{
+				TSharedPtr<FRotateMode> RotateMode = StaticCastSharedPtr<FRotateMode>(ActiveToolMode);
+				RotateMode->ToggleTrackBallRotation();
+			}
+			else
+			{
+				ActiveToolMode = MakeShared<FRotateMode>(InViewportClient, FText::FromString(TEXT("BlenderTool: Rotate")));
+			}
+			
 			return true;
 		}
 
@@ -233,6 +243,16 @@ void FBlenderViewportControlsEdMode::FinishActiveOperation(bool Success /** Fals
 	}
 
 	ActiveToolMode = nullptr;
+}
+
+bool FBlenderViewportControlsEdMode::IsRotateMode()
+{
+	if (TSharedPtr<FRotateMode> Mode = StaticCastSharedPtr<FRotateMode>(ActiveToolMode))
+	{
+		return true;
+	}
+
+	return false;
 }
 
 bool FBlenderViewportControlsEdMode::HasActiveSelection()

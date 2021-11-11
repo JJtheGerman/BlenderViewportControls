@@ -117,6 +117,7 @@ public:
 	virtual void SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis);
 	virtual void AddSnapOffset(const float InOffset);
 	bool IsSingleSelection() { return SelectionInfos.Num() == 1 ? true : false; }
+	FText GetOperationName() { return OperationName; };
 
 protected:
 
@@ -172,10 +173,22 @@ public:
 	virtual void DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas) override;
 	virtual void SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis) override;
 
+	void ToggleTrackBallRotation() { IsTrackBallRotating = !IsTrackBallRotating; };
+
 private:
+
+	FRotator GetTrackBallRotation();
+
+	FVector CalculateTrackballMousePos();
+
+	FVector CalculateTrackBallRotationAxis();
+
+	FVector TrackBallLastFrameVector;
 
 	FVector LastUpdateMouseRotVector;
 	FIntPoint LastCursorLocation;
+	FVector LastFrameCursorIntersection = FVector::ZeroVector;
+	bool IsTrackBallRotating = false;
 };
 
 class FScaleMode : public FBlenderToolMode

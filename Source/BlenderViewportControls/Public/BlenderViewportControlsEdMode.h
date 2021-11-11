@@ -31,6 +31,8 @@ protected:
 
 	void FinishActiveOperation(bool InAccepted = true);
 
+	bool IsRotateMode();
+
 	bool HasActiveSelection();
 
 	void DuplicateSelection(FEditorViewportClient* InViewportClient);

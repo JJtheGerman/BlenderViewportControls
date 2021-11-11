@@ -322,13 +322,19 @@ void FRotateMode::ToolUpdate()
 
 	FRotator AddRotation = UKismetMathLibrary::RotatorFromAxisAndAngle(LockedRotationAxis, degreesBetweenVectors);
 
+	if (IsTrackBallRotating)
+	{
+		AddRotation = GetTrackBallRotation();
+	}
+
+	// If the mouse did not move between frames we make sure that the output rotation is definitely 0
 	if (LastCursorLocation == ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos())
 	{
 		AddRotation = FRotator::ZeroRotator;
-	}	
+	}
 
-	FVector Origin = GroupTransform->GetOriginLocation();
 	GroupTransform->AddRotation(AddRotation);
+	
 
 	LastUpdateMouseRotVector = (CursorIntersection - GroupTransform->GetOriginLocation()).GetSafeNormal();
 	LastCursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
@@ -361,9 +367,66 @@ void FRotateMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis)
 	AxisLockHelper.IsDualAxisLock = false;
 }
 
+FRotator FRotateMode::GetTrackBallRotation()
+{
+	FVector CurrentRotationVector;
+	// Mouse Screen coordinate to pos on trackball
+	{
+		CurrentRotationVector = CalculateTrackballMousePos();
+	}
+	
+	float val = FVector::DotProduct(CurrentRotationVector, TrackBallLastFrameVector);
+	FVector RotationAxis = FVector::CrossProduct(CurrentRotationVector, TrackBallLastFrameVector).GetSafeNormal();
+	float RotationAngle = FMath::Acos(val) * 180.f / PI;
 
+	FVector NewRotationAxis = CalculateTrackBallRotationAxis();
 
+	{
+		TrackBallLastFrameVector = CurrentRotationVector;
+	}
 
+	return UKismetMathLibrary::RotatorFromAxisAndAngle(NewRotationAxis, -RotationAngle * 20.f);
+}
+
+FVector FRotateMode::CalculateTrackballMousePos()
+{
+	FIntPoint MousePosition = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
+	MousePosition.X = ((MousePosition.X) - (ToolViewportClient->Viewport->GetSizeXY().X / 2));
+	MousePosition.Y = ((ToolViewportClient->Viewport->GetSizeXY().Y / 2) - MousePosition.Y);
+	const float BallRadius = 5000.f;
+
+	int d = MousePosition.X * MousePosition.X + MousePosition.Y * MousePosition.Y;
+	float radiusSquared = BallRadius * BallRadius;
+
+	return FVector(MousePosition.X, MousePosition.Y, FMath::Sqrt(radiusSquared - d)).GetSafeNormal();
+}
+
+FVector FRotateMode::CalculateTrackBallRotationAxis()
+{
+	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
+	FVector CursorWorldPosition = WorldLocDir.Get<0>();
+	FVector CursorWorldDirection = WorldLocDir.Get<1>();
+
+	// Trace from the cursor onto a plane and get the intersection
+	FLinePlaneIntersectionHelper Helper;
+	Helper.TraceStartLocation = CursorWorldPosition;
+	Helper.TraceDirection = CursorWorldDirection;
+	Helper.PlaneOrigin = GroupTransform->GetOriginLocation();
+	Helper.PlaneNormal = GetCameraForwardVector();
+	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, Helper);
+
+	FVector RotationAxis = FVector::CrossProduct((LastFrameCursorIntersection - CursorIntersection).GetSafeNormal(), GetCameraForwardVector()).GetSafeNormal();
+	
+
+	float val = FVector::DotProduct(LastFrameCursorIntersection, CursorIntersection);
+	float RotationAngle = FMath::Acos(val) * 180.f / PI;
+	//float Degrees = FVector::Distance(LastFrameCursorIntersection, CursorIntersection);
+	//UE_LOG(LogTemp, Warning, TEXT("Degrees: %f"), Degrees);
+
+	LastFrameCursorIntersection = CursorIntersection;
+
+	return RotationAxis;
+}
 
 /**
  * Scale Tool Implementation
@@ -409,7 +472,6 @@ void FScaleMode::DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewp
 	// Draw a dashed line between the origin and the cursor
 	ToolHelperFunctions::DrawDashedLine(Canvas, LineStart, LineEnd);
 }
-
 
 
 
