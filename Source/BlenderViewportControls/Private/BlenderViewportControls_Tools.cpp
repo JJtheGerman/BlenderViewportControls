@@ -369,40 +369,6 @@ void FRotateMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis)
 
 FRotator FRotateMode::GetTrackBallRotation()
 {
-	FVector CurrentRotationVector;
-	// Mouse Screen coordinate to pos on trackball
-	{
-		CurrentRotationVector = CalculateTrackballMousePos();
-	}
-	
-	float val = FVector::DotProduct(CurrentRotationVector, TrackBallLastFrameVector);
-	FVector RotationAxis = FVector::CrossProduct(CurrentRotationVector, TrackBallLastFrameVector).GetSafeNormal();
-	float RotationAngle = FMath::Acos(val) * 180.f / PI;
-
-	FVector NewRotationAxis = CalculateTrackBallRotationAxis();
-
-	{
-		TrackBallLastFrameVector = CurrentRotationVector;
-	}
-
-	return UKismetMathLibrary::RotatorFromAxisAndAngle(NewRotationAxis, -RotationAngle * 20.f);
-}
-
-FVector FRotateMode::CalculateTrackballMousePos()
-{
-	FIntPoint MousePosition = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
-	MousePosition.X = ((MousePosition.X) - (ToolViewportClient->Viewport->GetSizeXY().X / 2));
-	MousePosition.Y = ((ToolViewportClient->Viewport->GetSizeXY().Y / 2) - MousePosition.Y);
-	const float BallRadius = 5000.f;
-
-	int d = MousePosition.X * MousePosition.X + MousePosition.Y * MousePosition.Y;
-	float radiusSquared = BallRadius * BallRadius;
-
-	return FVector(MousePosition.X, MousePosition.Y, FMath::Sqrt(radiusSquared - d)).GetSafeNormal();
-}
-
-FVector FRotateMode::CalculateTrackBallRotationAxis()
-{
 	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
 	FVector CursorWorldPosition = WorldLocDir.Get<0>();
 	FVector CursorWorldDirection = WorldLocDir.Get<1>();
@@ -416,16 +382,11 @@ FVector FRotateMode::CalculateTrackBallRotationAxis()
 	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, Helper);
 
 	FVector RotationAxis = FVector::CrossProduct((LastFrameCursorIntersection - CursorIntersection).GetSafeNormal(), GetCameraForwardVector()).GetSafeNormal();
-	
-
-	float val = FVector::DotProduct(LastFrameCursorIntersection, CursorIntersection);
-	float RotationAngle = FMath::Acos(val) * 180.f / PI;
-	//float Degrees = FVector::Distance(LastFrameCursorIntersection, CursorIntersection);
-	//UE_LOG(LogTemp, Warning, TEXT("Degrees: %f"), Degrees);
+	float RotationAngle = FVector::Distance(LastFrameCursorIntersection, CursorIntersection);
 
 	LastFrameCursorIntersection = CursorIntersection;
 
-	return RotationAxis;
+	return UKismetMathLibrary::RotatorFromAxisAndAngle(RotationAxis, -RotationAngle * 0.5f);
 }
 
 /**

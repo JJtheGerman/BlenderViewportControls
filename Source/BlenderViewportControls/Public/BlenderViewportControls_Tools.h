@@ -179,10 +179,6 @@ private:
 
 	FRotator GetTrackBallRotation();
 
-	FVector CalculateTrackballMousePos();
-
-	FVector CalculateTrackBallRotationAxis();
-
 	FVector TrackBallLastFrameVector;
 
 	FVector LastUpdateMouseRotVector;
