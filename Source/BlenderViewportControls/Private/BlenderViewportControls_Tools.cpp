@@ -322,13 +322,19 @@ void FRotateMode::ToolUpdate()
 
 	FRotator AddRotation = UKismetMathLibrary::RotatorFromAxisAndAngle(LockedRotationAxis, degreesBetweenVectors);
 
+	if (IsTrackBallRotating)
+	{
+		AddRotation = GetTrackBallRotation();
+	}
+
+	// If the mouse did not move between frames we make sure that the output rotation is definitely 0
 	if (LastCursorLocation == ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos())
 	{
 		AddRotation = FRotator::ZeroRotator;
-	}	
+	}
 
-	FVector Origin = GroupTransform->GetOriginLocation();
 	GroupTransform->AddRotation(AddRotation);
+	
 
 	LastUpdateMouseRotVector = (CursorIntersection - GroupTransform->GetOriginLocation()).GetSafeNormal();
 	LastCursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
@@ -361,9 +367,27 @@ void FRotateMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis)
 	AxisLockHelper.IsDualAxisLock = false;
 }
 
+FRotator FRotateMode::GetTrackBallRotation()
+{
+	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
+	FVector CursorWorldPosition = WorldLocDir.Get<0>();
+	FVector CursorWorldDirection = WorldLocDir.Get<1>();
 
+	// Trace from the cursor onto a plane and get the intersection
+	FLinePlaneIntersectionHelper Helper;
+	Helper.TraceStartLocation = CursorWorldPosition;
+	Helper.TraceDirection = CursorWorldDirection;
+	Helper.PlaneOrigin = GroupTransform->GetOriginLocation();
+	Helper.PlaneNormal = GetCameraForwardVector();
+	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, Helper);
 
+	FVector RotationAxis = FVector::CrossProduct((LastFrameCursorIntersection - CursorIntersection).GetSafeNormal(), GetCameraForwardVector()).GetSafeNormal();
+	float RotationAngle = FVector::Distance(LastFrameCursorIntersection, CursorIntersection);
 
+	LastFrameCursorIntersection = CursorIntersection;
+
+	return UKismetMathLibrary::RotatorFromAxisAndAngle(RotationAxis, -RotationAngle * 0.5f);
+}
 
 /**
  * Scale Tool Implementation
@@ -409,7 +433,6 @@ void FScaleMode::DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewp
 	// Draw a dashed line between the origin and the cursor
 	ToolHelperFunctions::DrawDashedLine(Canvas, LineStart, LineEnd);
 }
-
 
 
 
