@@ -177,7 +177,7 @@ public:
 
 private:
 
-	FRotator GetTrackBallRotation();
+	void GetTrackballAngleAndAxis(FVector& OutAxis, float& OutAngle);
 
 	FVector TrackBallLastFrameVector;
 
@@ -185,6 +185,10 @@ private:
 	FIntPoint LastCursorLocation;
 	FVector LastFrameCursorIntersection = FVector::ZeroVector;
 	bool IsTrackBallRotating = false;
+
+	float CurrentAngleIncrement = 0.f;
+	const float AngleSnapStep = 11.25f;
+	float LastFrameAngle = 0.f;
 };
 
 class FScaleMode : public FBlenderToolMode

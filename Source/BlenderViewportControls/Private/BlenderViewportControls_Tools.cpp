@@ -161,9 +161,6 @@ void FBlenderToolMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDual
 	AxisLockHelper.IsWorldSpace = IsSingleSelection() ? !AxisLockHelper.IsWorldSpace : true;
 }
 
-
-
-
 void FBlenderToolMode::AddSnapOffset(const float InOffset)
 {
 	SnapOffset += InOffset;
@@ -251,8 +248,6 @@ void FMoveMode::ToolClose(bool Success)
 	UE_LOG(LogMoveTool, Verbose, TEXT("Closed"));
 }
 
-
-
 /**
  * Rotate Tool Implementation
  */
@@ -298,46 +293,64 @@ void FRotateMode::ToolUpdate()
 	FVector currentRotVector = (CursorIntersection - GroupTransform->GetOriginLocation()).GetSafeNormal();
 
 	// Gives us the degrees between the cursor starting position and end position in -180 - 180;
-	float degreesBetweenVectors = UKismetMathLibrary::DegAcos(FVector::DotProduct(currentRotVector, LastUpdateMouseRotVector));
+	float RotationAngle = UKismetMathLibrary::DegAcos(FVector::DotProduct(currentRotVector, LastUpdateMouseRotVector));
 
 	// First check if the camera is looking down or up and flips. Otherwise dragging the mouse left would rotate the object
 	// to the right whenever we are looking from below. (Hard to explain, just uncomment the first "if" statement to see the behavior.
 	if (ToolViewportClient->GetViewRotation().Vector().Z > 0)
 	{
-		degreesBetweenVectors = degreesBetweenVectors * -1.f;
+		RotationAngle = RotationAngle * -1.f;
 	}
 	if (FVector::CrossProduct(currentRotVector, LastUpdateMouseRotVector).Z < 0.f)
 	{
-		degreesBetweenVectors = -degreesBetweenVectors;
+		RotationAngle = -RotationAngle;
 	}
 
 	// Set the rotation axis. Its determined by the active axis lock. 
 	// Some extra inverting of the axis needs to be done depending on camera position for the mouse interaction to work as a "human" would expect it to.
-	FVector LockedRotationAxis;
-	LockedRotationAxis = AxisLockHelper.LockVector * (FVector::DotProduct(AxisLockHelper.LockVector, GetCameraForwardVector()) < 0 ? -1.f : 1.f);
+	FVector RotationAxis;
+	RotationAxis = AxisLockHelper.LockVector * (FVector::DotProduct(AxisLockHelper.LockVector, GetCameraForwardVector()) < 0 ? -1.f : 1.f);
 	if (AxisLockHelper.CurrentLockedAxis == NONE)
 	{
-		LockedRotationAxis = ToolViewportClient->GetViewRotation().Vector();
+		RotationAxis = ToolViewportClient->GetViewRotation().Vector();
 	}
 
-	FRotator AddRotation = UKismetMathLibrary::RotatorFromAxisAndAngle(LockedRotationAxis, degreesBetweenVectors);
-
+	// Trackball rotation
 	if (IsTrackBallRotating)
 	{
-		AddRotation = GetTrackBallRotation();
+		GetTrackballAngleAndAxis(RotationAxis, RotationAngle);
 	}
 
 	// If the mouse did not move between frames we make sure that the output rotation is definitely 0
 	if (LastCursorLocation == ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos())
 	{
-		AddRotation = FRotator::ZeroRotator;
+		RotationAngle = 0.f;
 	}
 
+	// Stepping the rotation by AngleStepSnap when Ctrl is pressed
+	if (!IsTrackBallRotating && !ToolViewportClient->IsShiftPressed() && ToolViewportClient->IsCtrlPressed())
+	{
+		CurrentAngleIncrement += FMath::Abs(RotationAngle);
+		float angleDirection = RotationAngle > 0 ? 1.f : -1.f;
+		RotationAngle = 0.f;
+		if (CurrentAngleIncrement > AngleSnapStep)
+		{
+			CurrentAngleIncrement = 0.f;
+			RotationAngle = AngleSnapStep * angleDirection;
+		}
+	}
+	else
+	{
+		CurrentAngleIncrement = 0.f;
+	}
+
+	FRotator AddRotation = UKismetMathLibrary::RotatorFromAxisAndAngle(RotationAxis, RotationAngle);
 	GroupTransform->AddRotation(AddRotation);
 	
 
 	LastUpdateMouseRotVector = (CursorIntersection - GroupTransform->GetOriginLocation()).GetSafeNormal();
 	LastCursorLocation = ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
+	LastFrameAngle = RotationAngle;
 
 	DrawAxisLocks();
 }
@@ -367,7 +380,7 @@ void FRotateMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis)
 	AxisLockHelper.IsDualAxisLock = false;
 }
 
-FRotator FRotateMode::GetTrackBallRotation()
+void FRotateMode::GetTrackballAngleAndAxis(FVector& OutAxis, float& OutAngle)
 {
 	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
 	FVector CursorWorldPosition = WorldLocDir.Get<0>();
@@ -386,7 +399,9 @@ FRotator FRotateMode::GetTrackBallRotation()
 
 	LastFrameCursorIntersection = CursorIntersection;
 
-	return UKismetMathLibrary::RotatorFromAxisAndAngle(RotationAxis, -RotationAngle * 0.5f);
+	// Returns
+	OutAxis = RotationAxis;
+	OutAngle = -RotationAngle * 0.5f;
 }
 
 /**
@@ -433,8 +448,6 @@ void FScaleMode::DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewp
 	// Draw a dashed line between the origin and the cursor
 	ToolHelperFunctions::DrawDashedLine(Canvas, LineStart, LineEnd);
 }
-
-
 
 void FGroupTransform::SetScale(const FVector& InNewScale, const FVector& ScaleAxis, const bool bUniformScale)
 {
