@@ -152,12 +152,20 @@ void FBlenderToolMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDual
 	// Remove the lines we are currently drawing
 	AxisLineDrawHelper.Empty();
 
+	// Only toggle world/local space when the axis is the same
+	if (InAxisToLock == AxisLockHelper.CurrentLockedAxis)
+	{
+		// Single selections can toggle between local and world space, but multi selections should always only have world space locking
+		AxisLockHelper.IsWorldSpace = IsSingleSelection() ? !AxisLockHelper.IsWorldSpace : true;
+	}
+	else
+	{
+		AxisLockHelper.IsWorldSpace = true;
+	}
+
 	AxisLockHelper.CurrentLockedAxis = InAxisToLock;
 	AxisLockHelper.IsDualAxisLock = bDualAxis;
 	AxisLockHelper.TransformWhenLocked = GetGroupTransform()->GetParentTransform();
-
-	// Single selections can toggle between local and world space, but multi selections should always only have local space locking
-	AxisLockHelper.IsWorldSpace = IsSingleSelection() ? !AxisLockHelper.IsWorldSpace : true;
 }
 
 void FBlenderToolMode::AddSnapOffset(const float InOffset)
