@@ -224,12 +224,13 @@ void FMoveMode::ToolUpdate()
 		TArray<AActor*> IgnoredActors = GroupTransform->GetAllChildActors();
 		for (auto& Child : GroupTransform->GetChildren())
 		{
-			FIntPoint ChildScreenLocation = Child.ScreenSpaceOffset + ScreenSpaceOffsetLocation;
+			FIntPoint ChildScreenLocation = GetCursorPosition() - Child.ScreenSpaceOffset;
 			TTuple<FVector, FVector> Test = ToolHelperFunctions::ProjectScreenPositionToWorld(ToolViewportClient, ChildScreenLocation);
 			FVector TraceStart = Test.Get<0>();
-			FVector TraceEnd = Test.Get<1>() * 10000.f;
+			FVector TraceEnd = (TransformWorldDirection + Test.Get<1>()) * 10000.f;
 			FHitResult OutHit;
 			FCollisionQueryParams QueryParams;
+			QueryParams.bTraceComplex = true;
 			QueryParams.AddIgnoredActors(IgnoredActors);
 			if (ToolViewportClient->GetWorld()->LineTraceSingleByChannel(OutHit, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
 			{
