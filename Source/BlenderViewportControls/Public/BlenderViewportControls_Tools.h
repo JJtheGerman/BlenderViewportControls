@@ -53,6 +53,7 @@ struct FGroupTransform
 	void SetTransform(FTransform InTransform) {};
 	void AddRotation(const FRotator& InAddRotation);
 	void SetLocation(const FVector& InNewLocation);
+	void AddLocation(const FVector& InOffset);
 	void SetScale(const FVector& InNewScale, const FVector& ScaleAxis, bool bUniformScale);
 	void AddChild(AActor* NewChild, const FIntPoint& InScreenspaceOffset);
 	void FinishSetup(class FEditorViewportClient* InViewportClient);
@@ -119,6 +120,7 @@ public:
 	bool IsSingleSelection() { return SelectionInfos.Num() == 1 ? true : false; }
 	FText GetOperationName() { return OperationName; };
 	FIntPoint GetCursorPosition() { return ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos(); };
+	bool IsPrecisionModeActive() { return ToolViewportClient->IsShiftPressed(); };
 
 protected:
 
@@ -156,6 +158,9 @@ public:
 private:
 
 	FIntPoint ScreenSpaceOriginOffset;
+	FVector LastFrameCursorPosition;
+	bool bFirstLock = true;
+	bool bFirstUpdate = true;
 };
 
 class FRotateMode : public FBlenderToolMode

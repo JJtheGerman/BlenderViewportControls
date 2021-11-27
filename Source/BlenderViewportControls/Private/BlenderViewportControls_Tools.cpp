@@ -187,11 +187,9 @@ void FMoveMode::ToolBegin()
 void FMoveMode::ToolUpdate()
 {
 	CalculateAxisLock();
-
-	FIntPoint ScreenSpaceOffsetLocation = GetCursorPosition() + GroupTransform->GetScreenSpaceOffset();
 	
 	// Trace from the cursor onto a plane and get the intersection
-	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::ProjectScreenPositionToWorld(ToolViewportClient, ScreenSpaceOffsetLocation);
+	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::ProjectScreenPositionToWorld(ToolViewportClient, GetCursorPosition());
 	FVector TransformWorldPosition = WorldLocDir.Get<0>();
 	FVector TransformWorldDirection = WorldLocDir.Get<1>();
 
@@ -204,14 +202,22 @@ void FMoveMode::ToolUpdate()
 	{
 		LinePlaneCameraHelper.PlaneNormal = AxisLockHelper.LockPlaneNormal;
 	}
-
+	
 	FVector NewLocation = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, LinePlaneCameraHelper);
+	
+	// If this is the first update LastFrameLocation is not initialized so we set it here directly
+	if (bFirstUpdate)
+	{
+		LastFrameCursorPosition = NewLocation;
+		bFirstUpdate = false;
+	}
 
 	// Single Axis Locking
 	FVector LockedLocation = NewLocation;
 	if (!AxisLockHelper.IsDualAxisLock && AxisLockHelper.CurrentLockedAxis != NONE)
 	{
-		LockedLocation = UKismetMathLibrary::FindClosestPointOnLine(NewLocation, GroupTransform->GetOriginLocation(), AxisLockHelper.LockVector);
+		LockedLocation = UKismetMathLibrary::FindClosestPointOnLine(LockedLocation, GroupTransform->GetOriginLocation(), AxisLockHelper.LockVector);
+		if (bFirstLock) { LastFrameCursorPosition = LockedLocation; bFirstLock = false; } // HACKZ, FIX THIS SINGLE AXIS LOCKING!
 	}
 
 	// Draw the visual axis locking lines in the viewport
@@ -245,9 +251,14 @@ void FMoveMode::ToolUpdate()
 	}
 	else
 	{
+		// Precision mode scalar
+		float PrecisionModeScalar = IsPrecisionModeActive() ? 0.1f : 1.f;
+
 		// Set the final position
-		GroupTransform->SetLocation(LockedLocation);
+		GroupTransform->AddLocation((LockedLocation - LastFrameCursorPosition) * PrecisionModeScalar);
 	}
+
+	LastFrameCursorPosition = LockedLocation;
 }
 
 void FMoveMode::ToolClose(bool Success)
@@ -352,6 +363,10 @@ void FRotateMode::ToolUpdate()
 	{
 		CurrentAngleIncrement = 0.f;
 	}
+
+	// Precision Mode
+	float PrecisionModeScalar = IsPrecisionModeActive() ? 0.1f : 1.0f;
+	RotationAngle *= PrecisionModeScalar;
 
 	FRotator AddRotation = UKismetMathLibrary::RotatorFromAxisAndAngle(RotationAxis, RotationAngle);
 	GroupTransform->AddRotation(AddRotation);
@@ -515,6 +530,19 @@ void FGroupTransform::AddRotation(const FRotator& InAddRotation)
 void FGroupTransform::SetLocation(const FVector& InNewLocation)
 {
 	Parent.SetLocation(InNewLocation);
+
+	for (auto& Child : Children)
+	{
+		FVector RelativeLocation = -Child.RelativeOffset + Parent.GetLocation();
+
+		Child.Actor->Modify();
+		Child.Actor->SetActorLocation(RelativeLocation);
+	}
+}
+
+void FGroupTransform::AddLocation(const FVector& InOffset)
+{
+	Parent.SetLocation(Parent.GetLocation() + InOffset);
 
 	for (auto& Child : Children)
 	{
