@@ -143,3 +143,63 @@ void ToolHelperFunctions::DrawDashedLine(FCanvas* InCanvas, const FVector& InLin
 		}
 	}
 }
+
+/**
+ * [ Copy pasted from ActorFactory.cpp ]
+ * 
+ * Find am alignment transform for the specified actor rotation, given a model-space axis to align, and a world space normal to align to.
+ * This function attempts to find a 'natural' looking rotation by rotating around a local pitch axis, and a world Z. Rotating in this way
+ * should retain the roll around the model space axis, removing rotation artifacts introduced by a simpler quaternion rotation.
+ */
+FQuat ToolHelperFunctions::FindActorAlignmentRotation(const FQuat& InActorRotation, const FVector& InModelAxis, const FVector& InWorldNormal)
+{
+	FVector TransformedModelAxis = InActorRotation.RotateVector(InModelAxis);
+
+	const auto InverseActorRotation = InActorRotation.Inverse();
+	const auto DestNormalModelSpace = InverseActorRotation.RotateVector(InWorldNormal);
+
+	FQuat DeltaRotation = FQuat::Identity;
+
+	const float VectorDot = InWorldNormal | TransformedModelAxis;
+	if (1.f - FMath::Abs(VectorDot) <= KINDA_SMALL_NUMBER)
+	{
+		if (VectorDot < 0.f)
+		{
+			// Anti-parallel
+			return InActorRotation * FQuat::FindBetween(InModelAxis, DestNormalModelSpace);
+		}
+	}
+	else
+	{
+		const FVector Z(0.f, 0.f, 1.f);
+
+		// Find a reference axis to measure the relative pitch rotations between the source axis, and the destination axis.
+		FVector PitchReferenceAxis = InverseActorRotation.RotateVector(Z);
+		if (FMath::Abs(FVector::DotProduct(InModelAxis, PitchReferenceAxis)) > 0.7f)
+		{
+			PitchReferenceAxis = DestNormalModelSpace;
+		}
+
+		// Find a local 'pitch' axis to rotate around
+		const FVector OrthoPitchAxis = FVector::CrossProduct(PitchReferenceAxis, InModelAxis);
+		const float Pitch = FMath::Acos(PitchReferenceAxis | DestNormalModelSpace) - FMath::Acos(PitchReferenceAxis | InModelAxis);//FMath::Asin(OrthoPitchAxis.Size());
+
+		DeltaRotation = FQuat(OrthoPitchAxis.GetSafeNormal(), Pitch);
+		DeltaRotation.Normalize();
+
+		// Transform the model axis with this new pitch rotation to see if there is any need for yaw
+		TransformedModelAxis = (InActorRotation * DeltaRotation).RotateVector(InModelAxis);
+
+		const float ParallelDotThreshold = 0.98f; // roughly 11.4 degrees (!)
+		if (!FVector::Coincident(InWorldNormal, TransformedModelAxis, ParallelDotThreshold))
+		{
+			const float Yaw = FMath::Atan2(InWorldNormal.X, InWorldNormal.Y) - FMath::Atan2(TransformedModelAxis.X, TransformedModelAxis.Y);
+
+			// Rotation axis for yaw is the Z axis in world space
+			const FVector WorldYawAxis = (InActorRotation * DeltaRotation).Inverse().RotateVector(Z);
+			DeltaRotation *= FQuat(WorldYawAxis, -Yaw);
+		}
+	}
+
+	return InActorRotation * DeltaRotation;
+}

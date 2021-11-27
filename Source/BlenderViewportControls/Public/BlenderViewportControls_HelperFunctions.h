@@ -41,4 +41,5 @@ public:
 	static FVector GetAverageLocation(const TArray<AActor*>& SelectedActors);
 	static void DrawAxisLine(const UWorld* InWorld, const FVector& InLineOrigin, const FVector& InLineDirection, const FLinearColor& InLineColor);
 	static void DrawDashedLine(FCanvas* InCanvas, const FVector& InLineStart, const FVector& InLineEnd, const float InLineThickness = 2.5f, const float InDashSize = 10.f, const FLinearColor& InLineColor = FLinearColor::White);
+	static FQuat FindActorAlignmentRotation(const FQuat& InActorRotation, const FVector& InModelAxis, const FVector& InWorldNormal);
 };

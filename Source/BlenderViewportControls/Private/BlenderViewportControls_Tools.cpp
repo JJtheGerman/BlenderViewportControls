@@ -242,9 +242,13 @@ void FMoveMode::ToolUpdate()
 			{
 				if (OutHit.bBlockingHit)
 				{
+					// New Location
 					FVector NewLocWithSnapOffset = OutHit.ImpactPoint + (OutHit.ImpactNormal * SnapOffset);
 					Child.Actor->SetActorLocation(NewLocWithSnapOffset);
-					Child.Actor->SetActorRotation(UKismetMathLibrary::MakeRotFromZ(OutHit.ImpactNormal));
+
+					// New Rotation
+					FQuat SurfaceAlignedRotation = ToolHelperFunctions::FindActorAlignmentRotation(Child.Actor->GetActorRotation().Quaternion(), FVector(0.f, 0.f, 1.f), OutHit.ImpactNormal);
+					Child.Actor->SetActorRotation(SurfaceAlignedRotation);
 				}
 			}
 		}
