@@ -180,6 +180,8 @@ void FMoveMode::ToolBegin()
 {
 	UE_LOG(LogMoveTool, Verbose, TEXT("Begin"));
 
+	LastFrameCursorPosition = GetIntersection();
+
 	// Begins the child transaction
 	GEditor->BeginTransaction(FText());
 }
@@ -187,37 +189,21 @@ void FMoveMode::ToolBegin()
 void FMoveMode::ToolUpdate()
 {
 	CalculateAxisLock();
-	
-	// Trace from the cursor onto a plane and get the intersection
-	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::ProjectScreenPositionToWorld(ToolViewportClient, GetCursorPosition());
-	FVector TransformWorldPosition = WorldLocDir.Get<0>();
-	FVector TransformWorldDirection = WorldLocDir.Get<1>();
 
-	FLinePlaneIntersectionHelper LinePlaneCameraHelper;
-	LinePlaneCameraHelper.PlaneOrigin = GroupTransform->GetOriginLocation();
-	LinePlaneCameraHelper.TraceStartLocation = TransformWorldPosition;
-	LinePlaneCameraHelper.TraceDirection = TransformWorldDirection;
-	LinePlaneCameraHelper.PlaneNormal = GetCameraForwardVector();
-	if (AxisLockHelper.IsDualAxisLock && AxisLockHelper.CurrentLockedAxis != NONE)
-	{
-		LinePlaneCameraHelper.PlaneNormal = AxisLockHelper.LockPlaneNormal;
-	}
-	
-	FVector NewLocation = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, LinePlaneCameraHelper);
-	
-	// If this is the first update LastFrameLocation is not initialized so we set it here directly
-	if (bFirstUpdate)
-	{
-		LastFrameCursorPosition = NewLocation;
-		bFirstUpdate = false;
-	}
+	FVector NewLocation = GetIntersection();
 
 	// Single Axis Locking
 	FVector LockedLocation = NewLocation;
 	if (!AxisLockHelper.IsDualAxisLock && AxisLockHelper.CurrentLockedAxis != NONE)
 	{
 		LockedLocation = UKismetMathLibrary::FindClosestPointOnLine(LockedLocation, GroupTransform->GetOriginLocation(), AxisLockHelper.LockVector);
-		if (bFirstLock) { LastFrameCursorPosition = LockedLocation; bFirstLock = false; } // HACKZ, FIX THIS SINGLE AXIS LOCKING!
+
+		// We need to set the LastFrame position whenever we set a new lock axis for this to work correctly
+		if (bForceAxisLockLastFrameUpdate) 
+		{ 
+			LastFrameCursorPosition = LockedLocation; 
+			bForceAxisLockLastFrameUpdate = false; 
+		}
 	}
 
 	// Draw the visual axis locking lines in the viewport
@@ -272,6 +258,36 @@ void FMoveMode::ToolClose(bool Success)
 	UE_LOG(LogMoveTool, Verbose, TEXT("Closed"));
 }
 
+void FMoveMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis)
+{
+	FBlenderToolMode::SetAxisLock(InAxisToLock, bDualAxis);
+
+	// We set this to true again so the axis locking works correctly for this mode
+	bForceAxisLockLastFrameUpdate = true;
+}
+
+FVector FMoveMode::GetIntersection()
+{
+	// Trace from the cursor onto a plane and get the intersection
+	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::ProjectScreenPositionToWorld(ToolViewportClient, GetCursorPosition());
+	FVector TransformWorldPosition = WorldLocDir.Get<0>();
+	FVector TransformWorldDirection = WorldLocDir.Get<1>();
+
+	FLinePlaneIntersectionHelper LinePlaneCameraHelper;
+	LinePlaneCameraHelper.PlaneOrigin = GroupTransform->GetOriginLocation();
+	LinePlaneCameraHelper.TraceStartLocation = TransformWorldPosition;
+	LinePlaneCameraHelper.TraceDirection = TransformWorldDirection;
+	LinePlaneCameraHelper.PlaneNormal = GetCameraForwardVector();
+	if (AxisLockHelper.IsDualAxisLock && AxisLockHelper.CurrentLockedAxis != NONE)
+	{
+		LinePlaneCameraHelper.PlaneNormal = AxisLockHelper.LockPlaneNormal;
+	}
+
+	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, LinePlaneCameraHelper);
+
+	return Intersection;
+}
+
 /**
  * Rotate Tool Implementation
  */
@@ -282,38 +298,15 @@ void FRotateMode::ToolBegin()
 	// Begins the child transaction
 	GEditor->BeginTransaction(FText());
 
-	// Project the cursor from the screen to the world
-	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
-	FVector CursorWorldPosition = WorldLocDir.Get<0>();
-	FVector CursorWorldDirection = WorldLocDir.Get<1>();
-
-	// Trace from the cursor onto a plane and get the intersection
-	FLinePlaneIntersectionHelper Helper;
-	Helper.TraceStartLocation = CursorWorldPosition;
-	Helper.TraceDirection = CursorWorldDirection;
-	Helper.PlaneOrigin = GroupTransform->GetOriginLocation();
-	Helper.PlaneNormal = GetCameraForwardVector();
-	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, Helper);
-
-	LastUpdateMouseRotVector = (Intersection - GroupTransform->GetOriginLocation()).GetSafeNormal();
+	FVector CursorIntersection = GetIntersection();
+	LastUpdateMouseRotVector = (CursorIntersection - GroupTransform->GetOriginLocation()).GetSafeNormal();
 }
 
 void FRotateMode::ToolUpdate()
 {
 	CalculateAxisLock();
 
-	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
-	FVector CursorWorldPosition = WorldLocDir.Get<0>();
-	FVector CursorWorldDirection = WorldLocDir.Get<1>();
-
-	// Trace from the cursor onto a plane and get the intersection
-	FLinePlaneIntersectionHelper Helper;
-	Helper.TraceStartLocation = CursorWorldPosition;
-	Helper.TraceDirection = CursorWorldDirection;
-	Helper.PlaneOrigin = GroupTransform->GetOriginLocation();
-	Helper.PlaneNormal = GetCameraForwardVector();
-	FVector CursorIntersection = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, Helper);
-
+	FVector CursorIntersection = GetIntersection();
 	FVector currentRotVector = (CursorIntersection - GroupTransform->GetOriginLocation()).GetSafeNormal();
 
 	// Gives us the degrees between the cursor starting position and end position in -180 - 180;
@@ -406,6 +399,24 @@ void FRotateMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis)
 
 	// The rotate tool doesn't support two axis rotation because it doesn't make sense
 	AxisLockHelper.IsDualAxisLock = false;
+}
+
+FVector FRotateMode::GetIntersection()
+{
+	// Project the cursor from the screen to the world
+	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::GetCursorWorldPosition(ToolViewportClient);
+	FVector CursorWorldPosition = WorldLocDir.Get<0>();
+	FVector CursorWorldDirection = WorldLocDir.Get<1>();
+
+	// Trace from the cursor onto a plane and get the intersection
+	FLinePlaneIntersectionHelper Helper;
+	Helper.TraceStartLocation = CursorWorldPosition;
+	Helper.TraceDirection = CursorWorldDirection;
+	Helper.PlaneOrigin = GroupTransform->GetOriginLocation();
+	Helper.PlaneNormal = GetCameraForwardVector();
+	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, Helper);
+
+	return Intersection;
 }
 
 void FRotateMode::GetTrackballAngleAndAxis(FVector& OutAxis, float& OutAngle)

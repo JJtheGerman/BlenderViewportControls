@@ -153,13 +153,16 @@ public:
 	virtual void ToolUpdate() override;
 	virtual void ToolClose(bool Success) override;
 
+	virtual void SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis) override;
+
 	bool IsSurfaceSnapping() { return ToolViewportClient->IsCtrlPressed(); };
+	FVector GetIntersection();
 
 private:
 
 	FIntPoint ScreenSpaceOriginOffset;
 	FVector LastFrameCursorPosition;
-	bool bFirstLock = true;
+	bool bForceAxisLockLastFrameUpdate = true;
 	bool bFirstUpdate = true;
 };
 
@@ -180,6 +183,7 @@ public:
 	virtual void SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis) override;
 
 	void ToggleTrackBallRotation() { IsTrackBallRotating = !IsTrackBallRotating; };
+	FVector GetIntersection();
 
 private:
 
