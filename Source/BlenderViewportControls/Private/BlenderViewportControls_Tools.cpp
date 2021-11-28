@@ -13,6 +13,9 @@ DEFINE_LOG_CATEGORY(LogMoveTool);
 DEFINE_LOG_CATEGORY(LogRotateTool);
 DEFINE_LOG_CATEGORY(LogScaleTool);
 
+// User defined offset for the MoveTool surface snap. ( I wanted this to persist between operations, but not between plugin restarts )
+static float SavedSnapOffset = 0.f;
+
 /**
  * Base Implementation of the FBlenderToolMode
  */
@@ -170,7 +173,7 @@ void FBlenderToolMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDual
 
 void FBlenderToolMode::AddSnapOffset(const float InOffset)
 {
-	SnapOffset += InOffset;
+	SavedSnapOffset += InOffset;
 }
 
 /**
@@ -229,7 +232,7 @@ void FMoveMode::ToolUpdate()
 				if (OutHit.bBlockingHit)
 				{
 					// New Location
-					FVector NewLocWithSnapOffset = OutHit.ImpactPoint + (OutHit.ImpactNormal * SnapOffset);
+					FVector NewLocWithSnapOffset = OutHit.ImpactPoint + (OutHit.ImpactNormal * SavedSnapOffset);
 					Child.Actor->SetActorLocation(NewLocWithSnapOffset);
 
 					// New Rotation
