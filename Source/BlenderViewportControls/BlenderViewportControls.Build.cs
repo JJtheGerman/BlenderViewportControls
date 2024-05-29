@@ -39,6 +39,7 @@ public class BlenderViewportControls : ModuleRules
 				"UnrealEd",
 				"LevelEditor",
 				"ViewportInteraction",
+				"EditorFramework"
 			}
 			);
 		

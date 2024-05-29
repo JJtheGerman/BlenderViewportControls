@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 
+struct FAxisLineDrawHelper;
 DECLARE_LOG_CATEGORY_EXTERN(LogMoveTool, Display, All);
 DECLARE_LOG_CATEGORY_EXTERN(LogRotateTool, Display, All);
 DECLARE_LOG_CATEGORY_EXTERN(LogScaleTool, Display, All);
@@ -14,18 +15,18 @@ enum EToolAxisLock
 	X,
 	Y,
 	Z,
-	NONE
+	None
 };
 
 struct FAxisLockHelper
 {
 	bool IsDualAxisLock = false;
-	EToolAxisLock CurrentLockedAxis = NONE;
+	EToolAxisLock CurrentLockedAxis = None;
 	bool IsWorldSpace = false;
 	FTransform TransformWhenLocked = FTransform::Identity;
 	FVector LockVector = FVector::ZeroVector;
 	FVector LockPlaneNormal = FVector::ZeroVector;
-	bool isLocked() { return CurrentLockedAxis != NONE ? true : false; };
+	bool IsLocked() const { return CurrentLockedAxis != None; }
 };
 
 struct FGroupTransform
@@ -43,27 +44,27 @@ struct FGroupTransform
 
 	void SetAverageLocation();
 
-	FVector GetOriginLocation() { return Parent.GetLocation(); }
-	FTransform GetParentTransform() { return Parent; };
+	FVector GetOriginLocation() const { return Parent.GetLocation(); }
+	FTransform GetParentTransform() const { return Parent; };
 
-	FVector GetLocalForwardVector() { return Parent.GetRotation().GetForwardVector(); };
-	FVector GetLocalRightVector() { return Parent.GetRotation().GetRightVector(); };
-	FVector GetLocalUpVector() { return Parent.GetRotation().GetUpVector(); };
+	FVector GetLocalForwardVector() const { return Parent.GetRotation().GetForwardVector(); };
+	FVector GetLocalRightVector() const { return Parent.GetRotation().GetRightVector(); };
+	FVector GetLocalUpVector() const { return Parent.GetRotation().GetUpVector(); };
 
-	void SetTransform(FTransform InTransform) {};
+	static void SetTransform(FTransform InTransform) {}
 	void AddRotation(const FRotator& InAddRotation);
 	void SetLocation(const FVector& InNewLocation);
 	void AddLocation(const FVector& InOffset);
 	void SetScale(const FVector& InNewScale, const FVector& ScaleAxis, bool bUniformScale);
 	void AddChild(AActor* NewChild, const FIntPoint& InScreenspaceOffset);
-	void FinishSetup(class FEditorViewportClient* InViewportClient);
+	void FinishSetup(FEditorViewportClient* InViewportClient);
 
 public:
-	int32 GetNumChildren() { return Children.Num(); };
-	FIntPoint GetScreenSpaceOffset() { return ScreenSpaceParentCursorOffset; };
-	TArray<FChildTransform> GetChildren() { return Children; };
+	int32 GetNumChildren() const { return Children.Num(); }
+	FIntPoint GetScreenSpaceOffset() const { return ScreenSpaceParentCursorOffset; }
+	TArray<FChildTransform> GetChildren() { return Children; }
 	TArray<AActor*> GetAllChildActors();
-	FIntPoint GetOriginScreenLocation() { return OriginScreenLocation; };
+	FIntPoint GetOriginScreenLocation() const { return OriginScreenLocation; }
 
 private:
 	FTransform Parent;
@@ -77,28 +78,28 @@ private:
 class FBlenderToolMode
 {
 public:
-	FBlenderToolMode(class FEditorViewportClient* InViewportClient, FText InOperationName)
+	FBlenderToolMode(class FEditorViewportClient* InViewportClient, const FText& InOperationName)
 		: ToolViewportClient(InViewportClient), OperationName(InOperationName)
 	{
-		ToolBegin();
+		FBlenderToolMode::ToolBegin();
 	}
 
 	/** 
 	* Canceling any transaction in the destructor ensures that we don't enter some undefined transaction state.
 	* Regular transaction closing is handled by ToolClose() 
 	*/
-	virtual ~FBlenderToolMode() { GEditor->CancelTransaction(0); };
+	virtual ~FBlenderToolMode() { GEditor->CancelTransaction(0); }
 
 	// Main tool functions
 	virtual void ToolBegin();
 	virtual void ToolUpdate() {};
 	virtual void ToolClose(bool Success);
 
-	virtual void DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas) {};
+	virtual void DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas) {}
 
 	struct FSelectionToolHelper
 	{
-		FSelectionToolHelper(AActor* InActor, FTransform InTransform)
+		FSelectionToolHelper(AActor* InActor, const FTransform& InTransform)
 			: Actor(InActor), DefaultTransform(InTransform) {};
 
 		AActor* Actor;
@@ -108,19 +109,23 @@ public:
 	TArray<AActor*> GetSelectedActors() 
 	{
 		TArray<AActor*> Actors;
-		for (auto& Info : SelectionInfos) { Actors.Add(Info.Actor); }
+		for (auto& Info : SelectionInfos)
+		{
+			Actors.Add(Info.Actor);
+		}
+		
 		return Actors;
 	}
 
-	FVector GetCameraForwardVector() { return ToolViewportClient->GetViewRotation().Vector(); };
-	TSharedPtr<FGroupTransform> GetGroupTransform() { return GroupTransform; };
+	FVector GetCameraForwardVector() const { return ToolViewportClient->GetViewRotation().Vector(); }
+	TSharedPtr<FGroupTransform> GetGroupTransform() { return GroupTransform; }
 
 	virtual void SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis);
 	virtual void AddSnapOffset(const float InOffset);
-	bool IsSingleSelection() { return SelectionInfos.Num() == 1 ? true : false; }
-	FText GetOperationName() { return OperationName; };
-	FIntPoint GetCursorPosition() { return ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos(); };
-	bool IsPrecisionModeActive() { return ToolViewportClient->IsShiftPressed(); };
+	bool IsSingleSelection() const { return SelectionInfos.Num() == 1; }
+	FText GetOperationName() const { return OperationName; }
+	FIntPoint GetCursorPosition() const { return ToolViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos(); }
+	bool IsPrecisionModeActive() const { return ToolViewportClient->IsShiftPressed(); }
 
 protected:
 
@@ -129,12 +134,14 @@ protected:
 	/** Draws the lines in the viewport that are visible when an axis lock is active */
 	virtual void DrawAxisLocks();
 
-	class FEditorViewportClient* ToolViewportClient;
+	FEditorViewportClient* ToolViewportClient;
 	TSharedPtr<FGroupTransform> GroupTransform;
 	TArray<FSelectionToolHelper> SelectionInfos;
 	FAxisLockHelper AxisLockHelper;
 	float SnapOffset = 0.f;
+	
 private:
+	
 	const FText OperationName;
 	FLinearColor DefaultSelectionOutlineColor;
 	TArray<FAxisLineDrawHelper> AxisLineDrawHelper;
@@ -144,9 +151,10 @@ class FMoveMode : public FBlenderToolMode
 {
 public:
 
-	FMoveMode(FEditorViewportClient* InViewportClient, FText InOperationName)
-		:FBlenderToolMode(InViewportClient, InOperationName) {
-		ToolBegin();
+	FMoveMode(FEditorViewportClient* InViewportClient, const FText& InOperationName)
+		:FBlenderToolMode(InViewportClient, InOperationName)
+	{
+		FMoveMode::ToolBegin();
 	}
 
 	virtual void ToolBegin() override;
@@ -155,8 +163,8 @@ public:
 
 	virtual void SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis) override;
 
-	bool IsSurfaceSnapping() { return ToolViewportClient->IsCtrlPressed(); };
-	FVector GetIntersection();
+	bool IsSurfaceSnapping() const { return ToolViewportClient->IsCtrlPressed(); }
+	FVector GetIntersection() const;
 
 private:
 
@@ -170,9 +178,10 @@ class FRotateMode : public FBlenderToolMode
 {
 public:
 
-	FRotateMode(FEditorViewportClient* InViewportClient, FText InOperationName)
-		:FBlenderToolMode(InViewportClient, InOperationName) {
-		ToolBegin();
+	FRotateMode(FEditorViewportClient* InViewportClient, const FText& InOperationName)
+		:FBlenderToolMode(InViewportClient, InOperationName)
+	{
+		FRotateMode::ToolBegin();
 	}
 
 	virtual void ToolBegin() override;
@@ -205,9 +214,10 @@ class FScaleMode : public FBlenderToolMode
 {
 public:
 
-	FScaleMode(FEditorViewportClient* InViewportClient, FText InOperationName)
-		:FBlenderToolMode(InViewportClient, InOperationName) {
-		ToolBegin();
+	FScaleMode(FEditorViewportClient* InViewportClient, const FText& InOperationName)
+		:FBlenderToolMode(InViewportClient, InOperationName)
+	{
+		FScaleMode::ToolBegin();
 	}
 
 	virtual void ToolBegin() override;
@@ -217,6 +227,7 @@ public:
 	virtual void DrawHUD(FEditorViewportClient* ViewportClient, FViewport* Viewport, const FSceneView* View, FCanvas* Canvas) override;
 
 private:
+	
 	float StartDistance;
 	FIntPoint ActorScreenPosition;
 };

@@ -72,7 +72,10 @@ void FBlenderToolMode::ToolClose(bool Success /*= true*/)
 void FBlenderToolMode::CalculateAxisLock()
 {
 	// There is nothing to do when we aren't locking anything.
-	if (AxisLockHelper.CurrentLockedAxis == EToolAxisLock::NONE) { return; }
+	if (AxisLockHelper.CurrentLockedAxis == None)
+	{
+		return;
+	}
 
 	TArray<EToolAxisLock> LockedAxes;
 	TArray<FVector> LockVectors;
@@ -83,18 +86,18 @@ void FBlenderToolMode::CalculateAxisLock()
 	{
 		if (AxisLockHelper.CurrentLockedAxis == X)
 		{
-			LockedAxes.Add(EToolAxisLock::Z);
-			LockedAxes.Add(EToolAxisLock::Y);
+			LockedAxes.Add(Z);
+			LockedAxes.Add(Y);
 		}
 		else if (AxisLockHelper.CurrentLockedAxis == Y)
 		{
-			LockedAxes.Add(EToolAxisLock::X);
-			LockedAxes.Add(EToolAxisLock::Z);
+			LockedAxes.Add(X);
+			LockedAxes.Add(Z);
 		}
 		else if (AxisLockHelper.CurrentLockedAxis == Z)
 		{
-			LockedAxes.Add(EToolAxisLock::Y);
-			LockedAxes.Add(EToolAxisLock::X);
+			LockedAxes.Add(Y);
+			LockedAxes.Add(X);
 		}
 	}
 	else
@@ -102,7 +105,7 @@ void FBlenderToolMode::CalculateAxisLock()
 		LockedAxes.Add(AxisLockHelper.CurrentLockedAxis);
 	}
 
-	bool IsWorldSpace = AxisLockHelper.IsWorldSpace ? true : false;
+	const bool IsWorldSpace = AxisLockHelper.IsWorldSpace;
 	for (const auto& Axis : LockedAxes)
 	{
 		FVector LockVector;
@@ -136,6 +139,8 @@ void FBlenderToolMode::CalculateAxisLock()
 			{
 				AxisLockHelper.LockPlaneNormal = IsWorldSpace ? FVector::RightVector : GroupTransform->GetLocalRightVector();
 			}
+			break;
+		case None:
 			break;
 		}
 	}
@@ -197,7 +202,7 @@ void FMoveMode::ToolUpdate()
 
 	// Single Axis Locking
 	FVector LockedLocation = NewLocation;
-	if (!AxisLockHelper.IsDualAxisLock && AxisLockHelper.CurrentLockedAxis != NONE)
+	if (!AxisLockHelper.IsDualAxisLock && AxisLockHelper.CurrentLockedAxis != None)
 	{
 		LockedLocation = UKismetMathLibrary::FindClosestPointOnLine(LockedLocation, GroupTransform->GetOriginLocation(), AxisLockHelper.LockVector);
 
@@ -269,24 +274,24 @@ void FMoveMode::SetAxisLock(const EToolAxisLock& InAxisToLock, bool bDualAxis)
 	bForceAxisLockLastFrameUpdate = true;
 }
 
-FVector FMoveMode::GetIntersection()
+FVector FMoveMode::GetIntersection() const
 {
 	// Trace from the cursor onto a plane and get the intersection
 	TTuple<FVector, FVector> WorldLocDir = ToolHelperFunctions::ProjectScreenPositionToWorld(ToolViewportClient, GetCursorPosition());
-	FVector TransformWorldPosition = WorldLocDir.Get<0>();
-	FVector TransformWorldDirection = WorldLocDir.Get<1>();
+	const FVector TransformWorldPosition = WorldLocDir.Get<0>();
+	const FVector TransformWorldDirection = WorldLocDir.Get<1>();
 
 	FLinePlaneIntersectionHelper LinePlaneCameraHelper;
 	LinePlaneCameraHelper.PlaneOrigin = GroupTransform->GetOriginLocation();
 	LinePlaneCameraHelper.TraceStartLocation = TransformWorldPosition;
 	LinePlaneCameraHelper.TraceDirection = TransformWorldDirection;
 	LinePlaneCameraHelper.PlaneNormal = GetCameraForwardVector();
-	if (AxisLockHelper.IsDualAxisLock && AxisLockHelper.CurrentLockedAxis != NONE)
+	if (AxisLockHelper.IsDualAxisLock && AxisLockHelper.CurrentLockedAxis != None)
 	{
 		LinePlaneCameraHelper.PlaneNormal = AxisLockHelper.LockPlaneNormal;
 	}
 
-	FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, LinePlaneCameraHelper);
+	const FVector Intersection = ToolHelperFunctions::LinePlaneIntersectionFromCamera(ToolViewportClient, LinePlaneCameraHelper);
 
 	return Intersection;
 }
@@ -330,7 +335,7 @@ void FRotateMode::ToolUpdate()
 	// Some extra inverting of the axis needs to be done depending on camera position for the mouse interaction to work as a "human" would expect it to.
 	FVector RotationAxis;
 	RotationAxis = AxisLockHelper.LockVector * (FVector::DotProduct(AxisLockHelper.LockVector, GetCameraForwardVector()) < 0 ? -1.f : 1.f);
-	if (AxisLockHelper.CurrentLockedAxis == NONE)
+	if (AxisLockHelper.CurrentLockedAxis == None)
 	{
 		RotationAxis = ToolViewportClient->GetViewRotation().Vector();
 	}
@@ -467,7 +472,7 @@ void FScaleMode::ToolUpdate()
 	float CurrentDistance = FVector2D::Distance((FVector2D)ActorScreenPosition, (FVector2D)GetCursorPosition());
 	float NewScaleMultiplier = CurrentDistance / StartDistance;
 
-	GroupTransform->SetScale(FVector(NewScaleMultiplier), AxisLockHelper.LockVector, !AxisLockHelper.isLocked());
+	GroupTransform->SetScale(FVector(NewScaleMultiplier), AxisLockHelper.LockVector, !AxisLockHelper.IsLocked());
 	DrawAxisLocks();
 }
 

@@ -4,6 +4,7 @@
 #include "ViewportWorldInteraction.h"
 #include "BlenderViewportControlsEdMode.h"
 #include "BlenderViewportControls_Tools.h"
+#include "CanvasTypes.h"
 #include "EngineUtils.h"
 #include "EditorModeManager.h"
 #include "Components/LineBatchComponent.h"
@@ -11,7 +12,7 @@
 #include "Engine/Selection.h"
 
 
-TTuple<FVector, FVector> ToolHelperFunctions::GetCursorWorldPosition(class FEditorViewportClient* InViewportClient)
+TTuple<FVector, FVector> ToolHelperFunctions::GetCursorWorldPosition(FEditorViewportClient* InViewportClient)
 {
 	FSceneView* View = GetSceneView(InViewportClient);
 	FIntPoint MousePosition = InViewportClient->GetCursorWorldLocationFromMousePos().GetCursorPos();
@@ -22,7 +23,7 @@ TTuple<FVector, FVector> ToolHelperFunctions::GetCursorWorldPosition(class FEdit
 	return TTuple<FVector, FVector>(CursorWorldPosition, CursorWorldDirection);
 }
 
-TTuple<FVector, FVector> ToolHelperFunctions::ProjectScreenPositionToWorld(class FEditorViewportClient* InViewportClient, const FIntPoint& InScreenPosition)
+TTuple<FVector, FVector> ToolHelperFunctions::ProjectScreenPositionToWorld(FEditorViewportClient* InViewportClient, const FIntPoint& InScreenPosition)
 {
 	FSceneView* View = GetSceneView(InViewportClient);
 
@@ -32,19 +33,23 @@ TTuple<FVector, FVector> ToolHelperFunctions::ProjectScreenPositionToWorld(class
 	return TTuple<FVector, FVector>(CursorWorldPosition, CursorWorldDirection);
 }
 
-FVector ToolHelperFunctions::LinePlaneIntersectionFromCamera(class FEditorViewportClient* InViewportClient, const FLinePlaneIntersectionHelper& InHelper)
+FVector ToolHelperFunctions::LinePlaneIntersectionFromCamera(FEditorViewportClient* InViewportClient, const FLinePlaneIntersectionHelper& InHelper)
 {
 	FVector OutIntersection;
 	float T;
 
 	// TODO?: This 100000 should probably be replaced with the actual distance + some extra between the cursor Pos and ObjectPosition
-	UKismetMathLibrary::LinePlaneIntersection_OriginNormal(InHelper.TraceStartLocation, InHelper.TraceStartLocation + (InHelper.TraceDirection * 10000000),
-		InHelper.PlaneOrigin, InHelper.PlaneNormal, T, OutIntersection);
+	UKismetMathLibrary::LinePlaneIntersection_OriginNormal(InHelper.TraceStartLocation,
+		InHelper.TraceStartLocation + InHelper.TraceDirection * 10000000,
+		InHelper.PlaneOrigin,
+		InHelper.PlaneNormal,
+		T,
+		OutIntersection);
 
 	return OutIntersection;
 }
 
-FIntPoint ToolHelperFunctions::ProjectWorldLocationToScreen(class FEditorViewportClient* InViewportClient, FVector InWorldSpaceLocation, bool InClampValues)
+FIntPoint ToolHelperFunctions::ProjectWorldLocationToScreen(FEditorViewportClient* InViewportClient, FVector InWorldSpaceLocation, bool InClampValues)
 {
 	FSceneView* View = GetSceneView(InViewportClient);
 	
@@ -63,7 +68,7 @@ FIntPoint ToolHelperFunctions::ProjectWorldLocationToScreen(class FEditorViewpor
 	return FIntPoint(OutScreenPos.X, OutScreenPos.Y);
 }
 
-FSceneView* ToolHelperFunctions::GetSceneView(class FEditorViewportClient* InViewportClient)
+FSceneView* ToolHelperFunctions::GetSceneView(FEditorViewportClient* InViewportClient)
 {
 	FViewportCursorLocation MousePosition = InViewportClient->GetCursorWorldLocationFromMousePos();
 	FSceneViewFamilyContext ViewFamily(FSceneViewFamily::ConstructionValues(
@@ -81,7 +86,7 @@ FBlenderViewportControlsEdMode* ToolHelperFunctions::GetEdMode()
 	return (FBlenderViewportControlsEdMode*)GLevelEditorModeTools().GetActiveMode(FBlenderViewportControlsEdMode::EM_BlenderViewportControlsEdModeId);
 }
 
-class ATransformGroupActor* ToolHelperFunctions::GetTransformGroupActor()
+ATransformGroupActor* ToolHelperFunctions::GetTransformGroupActor()
 {
 	return GetEdMode()->GetTransformGroupActor();
 }

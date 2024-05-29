@@ -3,13 +3,7 @@
 #include "BlenderViewportControlsEdMode.h"
 #include "BlenderViewportControls_Tools.h"
 #include "BlenderViewportControls_HelperFunctions.h"
-#include "Toolkits/ToolkitManager.h"
-#include "EditorModeManager.h"
 #include "Editor/EditorEngine.h"
-#include "EditorWorldExtension.h"
-#include "Kismet/KismetMathLibrary.h"
-#include "ViewportWorldInteraction.h"
-#include "EngineUtils.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/Selection.h"
 
@@ -25,7 +19,11 @@ void FBlenderViewportControlsEdMode::Enter()
 	// If we lose our selection, set the SharedPtr to null to get rid of the active tool
 	SelectionChangedHandle = USelection::SelectionChangedEvent.AddLambda([&](UObject* Object)
 	{
-		if (ActiveToolMode) { ActiveToolMode->ToolClose(false); }
+		if(ActiveToolMode)
+		{
+			ActiveToolMode->ToolClose(false);
+		}
+		
 		ActiveToolMode = nullptr;
 	});
 }
@@ -104,7 +102,7 @@ bool FBlenderViewportControlsEdMode::InputKey(FEditorViewportClient* InViewportC
 			// The Rotate tool has a special trackball rotation mode that can be entered by pressing R again while the RotateMode is active
 			if (IsOperationInProgress() && IsRotateMode())
 			{
-				TSharedPtr<FRotateMode> RotateMode = StaticCastSharedPtr<FRotateMode>(ActiveToolMode);
+				const TSharedPtr<FRotateMode> RotateMode = StaticCastSharedPtr<FRotateMode>(ActiveToolMode);
 				RotateMode->ToggleTrackBallRotation();
 			}
 			else
@@ -144,7 +142,7 @@ bool FBlenderViewportControlsEdMode::InputKey(FEditorViewportClient* InViewportC
 	// E.g Ctrl + Z would not work without this.
 	if (IsOperationInProgress())
 	{
-		bool IsDualAxisLock = bShiftDown;
+		const bool IsDualAxisLock = bShiftDown;
 
 		// Constrain to X axis
 		if (InKey == EKeys::X && InEvent != IE_Released)
@@ -245,7 +243,7 @@ void FBlenderViewportControlsEdMode::FinishActiveOperation(bool Success /** Fals
 	ActiveToolMode = nullptr;
 }
 
-bool FBlenderViewportControlsEdMode::IsRotateMode()
+bool FBlenderViewportControlsEdMode::IsRotateMode() const
 {
 	if (TSharedPtr<FRotateMode> Mode = StaticCastSharedPtr<FRotateMode>(ActiveToolMode))
 	{
@@ -257,15 +255,15 @@ bool FBlenderViewportControlsEdMode::IsRotateMode()
 
 bool FBlenderViewportControlsEdMode::HasActiveSelection()
 {
-	return GEditor->GetSelectedActorCount() > 0 ? true : false;
+	return GEditor->GetSelectedActorCount() > 0;
 }
 
 void FBlenderViewportControlsEdMode::DuplicateSelection(FEditorViewportClient* InViewportClient)
 {
 	GEditor->BeginTransaction(FText::FromString(TEXT("BlenderTool: Duplicate")));
-	GEditor->edactDuplicateSelected(GetWorld()->GetCurrentLevel(), false);
-
-	// We want to activate the move tool right away after duplication so the user can easily move the duplicates.
-	ActiveToolMode = MakeShared<FMoveMode>(InViewportClient, FText::FromString(TEXT("BlenderTool: Duplicate")));
+	GEditor->Exec(GetWorld(), *FString("DUPLICATE"));
 	GEditor->EndTransaction();
+	
+	// We want to activate the move tool right away after duplication so the user can easily move the duplicates.
+	ActiveToolMode = MakeShared<FMoveMode>(InViewportClient, FText::FromString(TEXT("BlenderTool: Move")));
 }
